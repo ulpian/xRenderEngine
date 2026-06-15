@@ -1,0 +1,33 @@
+[package]
+name = "xre-engine"
+description = "Application layer for xRenderEngine: game loop, time, input mapping, ECS (hecs), asset manager."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[lints]
+workspace = true
+
+[features]
+default = []
+grid-raycaster = []
+
+[dependencies]
+xre-core = { path = "../xre-core" }
+xre-render = { path = "../xre-render" }
+xre-cello = { path = "../xre-cello" }
+xre-term = { path = "../xre-term" }
+hecs = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+proptest = { workspace = true }
+xre-tui = { path = "../xre-tui" }
+
+[[example]]
+name = "rift-fps"
+path = "examples/rift_fps.rs"
+required-features = ["grid-raycaster"]

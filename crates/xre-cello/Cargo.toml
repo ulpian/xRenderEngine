@@ -1,0 +1,22 @@
+[package]
+name = "xre-cello"
+description = "Scene management for xRenderEngine: scene graph, mesh, camera, lights, materials, animation, OBJ/MTL."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+xre-core = { path = "../xre-core" }
+xre-render = { path = "../xre-render" }
+glam = { workspace = true }
+thiserror = { workspace = true }
+image = { workspace = true }
+
+[dev-dependencies]
+proptest = { workspace = true }

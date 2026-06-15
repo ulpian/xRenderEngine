@@ -1,0 +1,43 @@
+[package]
+name = "xre-render"
+description = "Software 3D core for xRenderEngine: sample buffers, rasterizer, raycasters, and cell shaders."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[lints]
+workspace = true
+
+[features]
+# Row-parallel rasterization + cell shading via rayon (Stage 4.5). Default-on;
+# the serial path is byte-identical, so toggling this never changes output, only
+# throughput. Disable with `--no-default-features` to build the serial core.
+default = ["parallel"]
+parallel = ["dep:rayon"]
+# Opt-in harness feature: links dhat so the zero-alloc test can profile a warm
+# frame. Off by default (dhat installs a global allocator).
+dhat-heap = ["dep:dhat"]
+
+[dependencies]
+xre-core = { path = "../xre-core" }
+glam = { workspace = true }
+rayon = { workspace = true, optional = true }
+dhat = { workspace = true, optional = true }
+
+[dev-dependencies]
+proptest = { workspace = true }
+insta = { workspace = true }
+criterion = { workspace = true }
+
+[[bench]]
+name = "pipeline"
+harness = false
+
+# The zero-alloc gate needs the dhat allocator linked, so it lives in its own test
+# target guarded by the `dhat-heap` feature.
+[[test]]
+name = "zero_alloc"
+required-features = ["dhat-heap"]

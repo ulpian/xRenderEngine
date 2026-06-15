@@ -1,0 +1,39 @@
+[package]
+name = "xre-tui"
+description = "TUI layer for xRenderEngine: panels, grids, layout, widgets, focus, and the Viewport3D widget."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+xre-core = { path = "../xre-core" }
+xre-term = { path = "../xre-term" }
+xre-render = { path = "../xre-render", optional = true, default-features = false }
+unicode-width = { workspace = true }
+
+[features]
+# The Viewport3D widget pulls in the software renderer. On by default; turn it
+# off for a pure-TUI build (RiftEngine-Plan/07-phase-2-renderer-core.md §2.5).
+default = ["render", "parallel"]
+render = ["dep:xre-render"]
+# Row-parallel cell shading in Viewport3D (Stage 4.5). Forwards to the renderer's
+# `parallel` feature; a no-op without `render`. Byte-identical to the serial path.
+parallel = ["xre-render?/parallel"]
+
+[dev-dependencies]
+insta = { workspace = true }
+
+[[example]]
+name = "dashboard"
+path = "examples/dashboard.rs"
+
+[[example]]
+name = "spinning-cube"
+path = "examples/spinning_cube.rs"
+required-features = ["render"]

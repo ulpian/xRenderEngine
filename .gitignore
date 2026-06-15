@@ -1,0 +1,24 @@
+# Rust build artifacts
+/target/
+**/*.rs.bk
+*.pdb
+
+# Criterion benchmark output
+/target/criterion/
+
+# mdBook rendered output (the book/ sources under docs/book/src/ are committed)
+/docs/book/book/
+
+# insta snapshot review leftovers
+*.snap.new
+
+# Coverage
+*.profraw
+
+# Editor / OS noise
+.DS_Store
+*.swp
+.idea/
+.vscode/
+
+# Note: Cargo.lock IS committed — this workspace ships binaries.

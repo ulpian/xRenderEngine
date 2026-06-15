@@ -1,0 +1,22 @@
+[package]
+name = "xre-term"
+description = "Terminal backend for xRenderEngine: raw mode, capability probing, diffed presenter, input."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+xre-core = { path = "../xre-core" }
+crossterm = { workspace = true }
+thiserror = { workspace = true }
+unicode-width = { workspace = true }
+
+[[example]]
+name = "terminal-spike"
+path = "examples/terminal_spike.rs"

@@ -1,0 +1,19 @@
+---
+source: crates/xre-render/tests/golden_frames.rs
+expression: "render_to_text(&Mesh::uv_sphere(1.3, 24, 32), ShadeMode::PerSample)"
+---
+                                        
+                                        
+                                        
+                                        
+                                        
+              ,?rUZkkZYr?,              
+            ,fpho*####*akqt,            
+           [Opka*#####*ohbqQ]           
+          >JZpbhaoo**ooakdqOUi          
+          \U0mqdbkkhhkkbpwZLX(          
+          1vUQOmwqqqqqwmZ0CYu]          
+          ;/nzUCLQ0000QLJYcx|:          
+           I1txuczXXXzzvnr/};           
+            '!]1|/tttt\({?l'            
+              .^;li<<il:^.

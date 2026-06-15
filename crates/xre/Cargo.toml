@@ -1,0 +1,38 @@
+[package]
+name = "xre"
+description = "xRenderEngine facade crate: re-exports, prelude, and feature-flag coordination."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+xre-core = { path = "../xre-core" }
+xre-term = { path = "../xre-term" }
+xre-tui = { path = "../xre-tui" }
+xre-render = { path = "../xre-render" }
+xre-cello = { path = "../xre-cello" }
+xre-engine = { path = "../xre-engine" }
+
+[features]
+# Feature flags per RiftEngine-Plan/02-architecture.md §10. Inert in the skeleton;
+# they gate real functionality as the lower crates are implemented.
+default = ["mesh", "tui", "shape-shader", "parallel"]
+mesh = []
+tui = []
+shape-shader = []
+grid-raycaster = []
+voxel = []
+legacy-windows = []
+hot-reload = []
+braille = []
+# Row-parallel rendering (Stage 4.5), default-on. Forwards to the renderer and the
+# Viewport3D path. The canonical *serial* build is `-p xre-render --no-default-features`;
+# the facade's prelude hard-references render symbols, so the facade itself is not
+# meant to be built without default features.
+parallel = ["xre-render/parallel", "xre-tui/parallel"]

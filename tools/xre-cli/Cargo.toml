@@ -1,0 +1,26 @@
+[package]
+name = "xre-cli"
+description = "xRenderEngine command-line tool: scaffold projects, view OBJ models, run benches, calibrate fonts."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[lints]
+workspace = true
+
+[[bin]]
+name = "xre"
+path = "src/main.rs"
+
+[features]
+# Row-parallel rendering, default-on; forwards to the facade. Build with
+# `--no-default-features` for a single-core `xre` binary.
+default = ["parallel"]
+parallel = ["xre/parallel"]
+
+[dependencies]
+glyphgen = { path = "../glyphgen" }
+xre = { path = "../../crates/xre", default-features = false }

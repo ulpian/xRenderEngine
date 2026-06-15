@@ -1,0 +1,70 @@
+[workspace]
+resolver = "2"
+members = ["crates/*", "tools/*"]
+
+[workspace.package]
+version = "0.0.1"
+edition = "2021"
+rust-version = "1.94"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/ulpianmorina/xrenderengine"
+authors = ["Ulpian Morina <ulpianmorina@gmail.com>"]
+
+# Dependency catalogue: versions are pinned once here; crates opt in with
+# `<dep> = { workspace = true }`. See RiftEngine-Plan/02-architecture.md §1.
+[workspace.dependencies]
+glam = "0.29"
+crossterm = "0.28"
+hecs = "0.10"
+thiserror = "2"
+unicode-width = "0.2"
+# PNG/JPEG decoding for the image viewer (`xre view <image>`). Restricted to the
+# two formats we need so the dependency subtree (and binary) stays lean; the
+# custom BMP/PGM/PPM readers in xre-cello handle the rest.
+image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
+# Data-parallelism for the Phase 4.5 optimisation pass: row-parallel rasterization
+# and cell shading. Optional, behind each crate's `parallel` feature — the serial
+# path stays byte-identical (RiftEngine-Plan/09-phase-4-advanced-shading-performance.md §4.5).
+rayon = "1"
+
+# Dev / test tooling (RiftEngine-Plan/12-testing-strategy.md).
+criterion = "0.5"
+proptest = "1"
+insta = "1"
+# Heap-profiler harness: asserts the zero-allocation-per-frame invariant in CI
+# (RiftEngine-Plan/03-rendering-pipeline-spec.md §D, 12-testing-strategy.md).
+dhat = "0.3"
+# Dev-tool-only: used solely by `glyphgen` to rasterize fonts. Never ships in the
+# engine (RiftEngine-Plan/05-phase-0-foundations.md §0.4).
+ab_glyph = "0.2"
+
+# Lint set adopted from gemini-engine (RiftEngine-Plan/05-phase-0-foundations.md §0.1).
+[workspace.lints.clippy]
+pedantic = { level = "warn", priority = -1 }
+nursery = { level = "warn", priority = -1 }
+unwrap_used = "warn"
+# The product name "xRenderEngine" is mixed-case prose, not a code item; without this,
+# doc_markdown would demand backticks around the project's own name everywhere.
+doc_markdown = "allow"
+# Allowed in rendering hot paths — float/int casts are intentional there.
+cast_precision_loss = "allow"
+cast_possible_truncation = "allow"
+cast_sign_loss = "allow"
+cast_possible_wrap = "allow"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+missing_docs = "warn" # escalates to "deny" by Phase 6
+
+# Release profile (RiftEngine-Plan/11-phase-6-distribution-release.md §6.3):
+# LTO + strip + single codegen unit for a small, fast binary. We keep
+# `opt-level = 3` rather than `z` so the software renderer stays fast; the binary
+# budget (< 5 MB) is met with strip + LTO. `panic = "unwind"` is retained so the
+# library's presenter can restore the terminal via its panic hook; the CLI builds
+# with abort only in a dedicated dist profile if size demands it.
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+strip = true
+panic = "unwind"

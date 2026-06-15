@@ -1,0 +1,9 @@
+[book]
+title = "The xRenderEngine Book"
+authors = ["Ulpian Morina and contributors"]
+language = "en"
+src = "src"
+
+[output.html]
+default-theme = "navy"
+git-repository-url = "https://github.com/ulpianmorina/xrenderengine"

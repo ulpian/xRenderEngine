@@ -1,0 +1,70 @@
+xRenderEngine
+Copyright (c) 2026 Ulpian Morina and contributors
+
+This product is licensed under MIT OR Apache-2.0, at your option (see LICENSE,
+LICENSE-MIT and LICENSE-APACHE).
+
+================================================================================
+Prior art and attributions
+================================================================================
+
+xRenderEngine reimplements techniques described in several prior terminal-
+rendering projects. Except where noted below, the reimplementation is at the
+level of *technique and prose*, not source code; no third-party source is
+copied.
+
+- asciimare (MIT) — voxel raycaster + precomputed glyph-luminance table. Our
+  luminance-ramp model and font-coverage calibration follow its approach. We
+  ship *measured numbers*, never font outlines.
+
+- Ymael (C++/ncurses) — programmable-pipeline rasterizer (vertex/fragment
+  stages, depth buffer, OBJ loader). Techniques referenced; its lack of near-
+  plane clipping is explicitly avoided.
+
+- Command_Line_3D (C++/Windows) — functional pixel-shader console API
+  (FillRectangle(lambda)), double-buffered presentation, ECS scene views and a
+  frame pacer. Techniques referenced (the `fill_with` debug API, the frame
+  pacer, the single-present diff).
+
+- justMoritz / 3d-game-engine (JS, javidx9 lineage) — grid raycasting and text
+  presentation. Concept-level reference only; the grid raycaster's true vertical
+  pitch fixes its row-shift artifact.
+
+- "The Algorithm for Painting With ASCII Characters" by Alex Harri — the 6-D
+  shape-vector glyph-selection technique with per-component normalization and
+  contrast enhancement. Reimplemented from the article's prose; no code reuse.
+
+- gemini-engine (MIT, Ren "renpenguin") — evaluated and rejected as a base
+  dependency (see RiftEngine-Plan/14-gemini-engine-analysis.md). Its **ear-
+  clipping triangulator** is vendored (re-implemented and hardened) in
+  `xre-cello/src/triangulate.rs`; its lint set, `WrappingMode` plot policy and
+  adapter-canvas API patterns inspired the corresponding code. gemini-engine is
+  MIT-licensed:
+
+    Copyright (c) renpenguin
+    Permission is hereby granted, free of charge, to any person obtaining a copy
+    of this software and associated documentation files (the "Software"), to deal
+    in the Software without restriction... (full MIT text applies).
+
+================================================================================
+Bundled assets
+================================================================================
+
+- assets/biohand.obj — "Robotic Hand" (https://skfb.ly/o8PzE) by Jack Ansell is
+  licensed under Creative Commons Attribution (http://creativecommons.org/licenses/by/4.0/).
+
+- assets/bmw.obj — "2018 BMW M8 GTE" (https://skfb.ly/pzKXW) by OUTPISTON is
+  licensed under CC Attribution-NonCommercial-ShareAlike (http://creativecommons.org/licenses/by-nc-sa/4.0/).
+
+- assets/cello.obj — "Cello" (https://skfb.ly/ptptw) by VM-Models is licensed
+  under Creative Commons Attribution (http://creativecommons.org/licenses/by/4.0/).
+
+================================================================================
+Bundled font measurements
+================================================================================
+
+Glyph atlases (luminance ramps and shape vectors) ship as *measured coverage
+numbers*, which are facts about character shapes, not copyrightable font
+outlines. No font files are redistributed. Generate your own with
+`xre glyphgen --font <file.ttf>`; prefer fonts whose license permits metric
+extraction (e.g. JetBrains Mono, DejaVu, Fira Code).

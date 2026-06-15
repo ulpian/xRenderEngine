@@ -1,0 +1,57 @@
+name: Release
+
+# Builds prebuilt `xre` binaries for the tier-1 targets on a version tag and
+# attaches them to the GitHub release (RiftEngine-Plan/11-phase-6-distribution-release.md
+# §6.3). `cargo install xre-cli` remains the source path; this is the no-toolchain path.
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest,  target: x86_64-unknown-linux-gnu }
+          - { os: ubuntu-latest,  target: x86_64-unknown-linux-musl }
+          - { os: ubuntu-latest,  target: aarch64-unknown-linux-musl }
+          - { os: macos-latest,   target: x86_64-apple-darwin }
+          - { os: macos-latest,   target: aarch64-apple-darwin }
+          - { os: windows-latest, target: x86_64-pc-windows-msvc }
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - name: Install cross deps (musl)
+        if: contains(matrix.target, 'musl')
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y musl-tools
+      - name: Build release binary
+        run: cargo build --release -p xre-cli --target ${{ matrix.target }}
+      - name: Package
+        shell: bash
+        run: |
+          bin=xre
+          [ "${{ matrix.os }}" = "windows-latest" ] && bin=xre.exe
+          dir="xre-${{ github.ref_name }}-${{ matrix.target }}"
+          mkdir "$dir"
+          cp "target/${{ matrix.target }}/release/$bin" "$dir/"
+          cp README.md LICENSE NOTICE "$dir/" 2>/dev/null || true
+          tar czf "$dir.tar.gz" "$dir"
+          shasum -a 256 "$dir.tar.gz" > "$dir.tar.gz.sha256" || sha256sum "$dir.tar.gz" > "$dir.tar.gz.sha256"
+      - name: Upload to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            xre-*.tar.gz
+            xre-*.tar.gz.sha256

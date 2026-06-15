@@ -1,0 +1,24 @@
+[package]
+name = "glyphgen"
+description = "Offline font-calibration tool: rasterizes a monospace font into luminance ramps and shape vectors."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[lints]
+workspace = true
+
+[lib]
+name = "glyphgen"
+path = "src/lib.rs"
+
+[[bin]]
+name = "glyphgen"
+path = "src/main.rs"
+
+[dependencies]
+ab_glyph = { workspace = true }
+thiserror = { workspace = true }
