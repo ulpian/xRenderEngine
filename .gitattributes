@@ -1,0 +1,15 @@
+# Normalize line endings to LF on checkout for every text file so that
+# `cargo fmt --all --check` (rustfmt.toml: newline_style = "Unix") passes on
+# Windows CI, which would otherwise check files out with CRLF endings.
+* text=auto eol=lf
+
+# Binary assets — never apply text or EOL normalization.
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.ico   binary
+*.ttf   binary
+*.otf   binary
+*.woff  binary
+*.woff2 binary
