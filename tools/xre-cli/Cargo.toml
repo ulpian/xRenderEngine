@@ -7,6 +7,8 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 authors.workspace = true
+keywords = ["terminal", "ascii", "3d", "renderer", "cli"]
+categories = ["command-line-utilities", "rendering"]
 
 [lints]
 workspace = true
@@ -19,8 +21,10 @@ path = "src/main.rs"
 # Row-parallel rendering, default-on; forwards to the facade. Build with
 # `--no-default-features` for a single-core `xre` binary.
 default = ["parallel"]
-parallel = ["xre/parallel"]
+parallel = ["xre-rs/parallel"]
 
 [dependencies]
-glyphgen = { path = "../glyphgen" }
-xre = { path = "../../crates/xre", default-features = false }
+glyphgen = { path = "../glyphgen", version = "0.0.1" }
+# Facade is published as `xre-rs`; its library target is named `xre`, so the
+# source keeps using `xre::…`.
+xre-rs = { path = "../../crates/xre", version = "0.0.1", default-features = false }

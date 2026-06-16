@@ -7,6 +7,11 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 authors.workspace = true
+keywords = ["terminal", "ascii", "3d", "rasterizer", "renderer"]
+categories = ["rendering::engine", "rendering"]
+
+[package.metadata.docs.rs]
+all-features = true
 
 [lints]
 workspace = true
@@ -22,7 +27,7 @@ parallel = ["dep:rayon"]
 dhat-heap = ["dep:dhat"]
 
 [dependencies]
-xre-core = { path = "../xre-core" }
+xre-core = { path = "../xre-core", version = "0.0.1" }
 glam = { workspace = true }
 rayon = { workspace = true, optional = true }
 dhat = { workspace = true, optional = true }

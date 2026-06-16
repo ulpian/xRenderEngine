@@ -76,7 +76,7 @@ cargo run -p xre-tui --example spinning-cube
 cargo run -p xre-engine --example rift-fps --features grid-raycaster
 
 # Load and orbit an OBJ model; press 'c' to cycle cell shaders
-cargo run -p xre-cli -- view assets/cube.obj
+cargo run -p xre-cli -- view assets/bmw.obj
 cargo run -p xre-cli -- view model.obj --snapshot out.txt   # headless export
 
 # Report the render-pipeline timings; calibrate a font into a glyph ramp

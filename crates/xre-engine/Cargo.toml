@@ -7,6 +7,11 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 authors.workspace = true
+keywords = ["game-engine", "ecs", "terminal", "3d", "gamedev"]
+categories = ["game-engines", "game-development"]
+
+[package.metadata.docs.rs]
+all-features = true
 
 [lints]
 workspace = true
@@ -16,16 +21,16 @@ default = []
 grid-raycaster = []
 
 [dependencies]
-xre-core = { path = "../xre-core" }
-xre-render = { path = "../xre-render" }
-xre-cello = { path = "../xre-cello" }
-xre-term = { path = "../xre-term" }
+xre-core = { path = "../xre-core", version = "0.0.1" }
+xre-render = { path = "../xre-render", version = "0.0.1" }
+xre-cello = { path = "../xre-cello", version = "0.0.1" }
+xre-term = { path = "../xre-term", version = "0.0.1" }
 hecs = { workspace = true }
 thiserror = { workspace = true }
 
 [dev-dependencies]
 proptest = { workspace = true }
-xre-tui = { path = "../xre-tui" }
+xre-tui = { path = "../xre-tui", version = "0.0.1" }
 
 [[example]]
 name = "rift-fps"

@@ -1,5 +1,8 @@
 [package]
-name = "xre"
+# Published as `xre-rs` because the `xre` name is taken on crates.io by an
+# unrelated crate. The library target keeps the name `xre` (see `[lib]` below),
+# so downstream code still writes `use xre::…` after `xre-rs = "0.0.1"`.
+name = "xre-rs"
 description = "xRenderEngine facade crate: re-exports, prelude, and feature-flag coordination."
 version.workspace = true
 edition.workspace = true
@@ -7,17 +10,26 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 authors.workspace = true
+readme = "README.md"
+keywords = ["terminal", "ascii", "3d", "game-engine", "tui"]
+categories = ["rendering::engine", "game-engines", "command-line-interface"]
+
+[lib]
+name = "xre"
+
+[package.metadata.docs.rs]
+all-features = true
 
 [lints]
 workspace = true
 
 [dependencies]
-xre-core = { path = "../xre-core" }
-xre-term = { path = "../xre-term" }
-xre-tui = { path = "../xre-tui" }
-xre-render = { path = "../xre-render" }
-xre-cello = { path = "../xre-cello" }
-xre-engine = { path = "../xre-engine" }
+xre-core = { path = "../xre-core", version = "0.0.1" }
+xre-term = { path = "../xre-term", version = "0.0.1" }
+xre-tui = { path = "../xre-tui", version = "0.0.1" }
+xre-render = { path = "../xre-render", version = "0.0.1" }
+xre-cello = { path = "../xre-cello", version = "0.0.1" }
+xre-engine = { path = "../xre-engine", version = "0.0.1" }
 
 [features]
 # Feature flags per RiftEngine-Plan/02-architecture.md §10. Inert in the skeleton;

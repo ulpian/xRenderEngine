@@ -7,12 +7,14 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 authors.workspace = true
+keywords = ["terminal", "tui", "ansi", "raw-mode", "input"]
+categories = ["command-line-interface"]
 
 [lints]
 workspace = true
 
 [dependencies]
-xre-core = { path = "../xre-core" }
+xre-core = { path = "../xre-core", version = "0.0.1" }
 crossterm = { workspace = true }
 thiserror = { workspace = true }
 unicode-width = { workspace = true }

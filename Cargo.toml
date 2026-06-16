@@ -6,8 +6,8 @@ members = ["crates/*", "tools/*"]
 version = "0.0.1"
 edition = "2021"
 rust-version = "1.94"
-license = "MIT OR Apache-2.0"
-repository = "https://github.com/ulpianmorina/xrenderengine"
+license = "Apache-2.0"
+repository = "https://github.com/ulpian/xrenderengine"
 authors = ["Ulpian Morina <ulpianmorina@gmail.com>"]
 
 # Dependency catalogue: versions are pinned once here; crates opt in with

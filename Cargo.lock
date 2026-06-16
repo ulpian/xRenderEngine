@@ -1594,18 +1594,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "xre"
-version = "0.0.1"
-dependencies = [
- "xre-cello",
- "xre-core",
- "xre-engine",
- "xre-render",
- "xre-term",
- "xre-tui",
-]
-
-[[package]]
 name = "xre-cello"
 version = "0.0.1"
 dependencies = [
@@ -1622,7 +1610,7 @@ name = "xre-cli"
 version = "0.0.1"
 dependencies = [
  "glyphgen",
- "xre",
+ "xre-rs",
 ]
 
 [[package]]
@@ -1659,6 +1647,18 @@ dependencies = [
  "proptest",
  "rayon",
  "xre-core",
+]
+
+[[package]]
+name = "xre-rs"
+version = "0.0.1"
+dependencies = [
+ "xre-cello",
+ "xre-core",
+ "xre-engine",
+ "xre-render",
+ "xre-term",
+ "xre-tui",
 ]
 
 [[package]]

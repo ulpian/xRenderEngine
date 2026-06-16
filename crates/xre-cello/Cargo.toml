@@ -7,13 +7,15 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 authors.workspace = true
+keywords = ["3d", "obj", "scene", "mesh", "loader"]
+categories = ["rendering", "game-development"]
 
 [lints]
 workspace = true
 
 [dependencies]
-xre-core = { path = "../xre-core" }
-xre-render = { path = "../xre-render" }
+xre-core = { path = "../xre-core", version = "0.0.1" }
+xre-render = { path = "../xre-render", version = "0.0.1" }
 glam = { workspace = true }
 thiserror = { workspace = true }
 image = { workspace = true }
