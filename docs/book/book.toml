@@ -6,4 +6,4 @@ src = "src"
 
 [output.html]
 default-theme = "navy"
-git-repository-url = "https://github.com/ulpianmorina/xrenderengine"
+git-repository-url = "https://github.com/ulpian/xRenderEngine"

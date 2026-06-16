@@ -1,6 +1,6 @@
 # xre-rs
 
-<img src="https://raw.githubusercontent.com/ulpian/xrenderengine/main/xrenderengine_cello.gif" alt="xRenderEngine — cello model demo" width="100%">
+<img src="https://raw.githubusercontent.com/ulpian/xRenderEngine/main/xrenderengine_cello.gif" alt="xRenderEngine — cello model demo" width="100%">
 
 **A lightweight 3D rendering engine and game framework that runs in your terminal.**
 
@@ -50,4 +50,4 @@ separately as [`xre-cli`](https://crates.io/crates/xre-cli) (`cargo install xre-
 ## License
 
 Licensed under the Apache License, Version 2.0. See
-[`LICENSE`](https://github.com/ulpian/xrenderengine/blob/main/LICENSE).
+[`LICENSE`](https://github.com/ulpian/xRenderEngine/blob/main/LICENSE).

@@ -7,7 +7,7 @@ version = "0.0.1"
 edition = "2021"
 rust-version = "1.94"
 license = "Apache-2.0"
-repository = "https://github.com/ulpian/xrenderengine"
+repository = "https://github.com/ulpian/xRenderEngine"
 authors = ["Ulpian Morina <ulpianmorina@gmail.com>"]
 
 # Dependency catalogue: versions are pinned once here; crates opt in with

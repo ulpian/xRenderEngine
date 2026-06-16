@@ -8,7 +8,7 @@ both named `xre`.
 
 This book is the practical guide. The design rationale and full roadmap live in
 the planning archive under `RiftEngine-Plan/` in the
-[repository](https://github.com/ulpianmorina/xrenderengine) (kept under its
+[repository](https://github.com/ulpian/xRenderEngine) (kept under its
 original name); start with `02-architecture.md` if you want the why behind the what.
 
 ## Two ideas
