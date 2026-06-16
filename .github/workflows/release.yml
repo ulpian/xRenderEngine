@@ -49,9 +49,20 @@ jobs:
           cp README.md LICENSE NOTICE "$dir/" 2>/dev/null || true
           tar czf "$dir.tar.gz" "$dir"
           shasum -a 256 "$dir.tar.gz" > "$dir.tar.gz.sha256" || sha256sum "$dir.tar.gz" > "$dir.tar.gz.sha256"
+      - name: Extract release notes from CHANGELOG
+        shell: bash
+        run: |
+          ver="${GITHUB_REF_NAME#v}"
+          awk -v v="$ver" 'index($0,"## ["v"]")==1{p=1;next} /^## \[/{if(p)exit} p' CHANGELOG.md \
+            | sed '/^\[[^]]*\]: http/d' > RELEASE_BODY.md
+          if [ ! -s RELEASE_BODY.md ]; then
+            echo "No CHANGELOG section found for $ver" >&2
+            exit 1
+          fi
       - name: Upload to release
         uses: softprops/action-gh-release@v2
         with:
+          body_path: RELEASE_BODY.md
           files: |
             xre-*.tar.gz
             xre-*.tar.gz.sha256

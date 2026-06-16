@@ -6,9 +6,12 @@ All notable changes to xRenderEngine are documented here. The format follows
 
 ## [Unreleased]
 
-The full engine across Phases 0–5 of the roadmap is implemented and tested; the
-workspace builds clean on stable with `clippy -D warnings` and a green test
-suite (unit, property, golden-frame and benchmark coverage).
+## [0.0.1] - 2026-06-16
+
+First public release. The full engine across Phases 0–5 of the roadmap (plus the
+Phase 4.5 parallelism pass) is implemented and tested; the workspace builds clean
+on stable with `clippy -D warnings` and a green test suite (unit, property,
+golden-frame and benchmark coverage).
 
 ### Added
 
@@ -52,6 +55,21 @@ suite (unit, property, golden-frame and benchmark coverage).
   quickstart, TUI guide, 3D rendering, cell shaders, scenes & assets, the game
   loop, glyph calibration, terminal compatibility, and a CLI reference.
 
+### Packaging
+
+- **Published to crates.io.** The seven library crates ship as `xre-core`,
+  `xre-term`, `xre-render`, `xre-cello`, `xre-tui`, `xre-engine`, and the facade
+  `xre-rs` (its library target is named `xre`, as the `xre` name was taken).
+  Downstream code depends on `xre-rs = "0.0.1"` and keeps writing `use xre::…`.
+  Internal path dependencies now pin their version, so `cargo deny`'s wildcard
+  ban passes.
+- **Prebuilt binaries.** The `Release` workflow attaches `xre` binaries for the
+  six tier-1 targets (Linux gnu/musl x86_64, musl aarch64, macOS x86_64/aarch64,
+  Windows MSVC x86_64) to this GitHub release.
+- The `xre-cli` and `glyphgen` tools are **not** on crates.io yet; install the
+  CLI from source (`cargo install --path tools/xre-cli`) or use the attached
+  binaries.
+
 ### Notes
 
 - Determinism: result paths use plain `a*b + c` rather than FMA, and the
@@ -59,4 +77,7 @@ suite (unit, property, golden-frame and benchmark coverage).
   golden frames stay bit-identical across platforms and core counts.
 - Deferred to post-0.1: the SIMD hot-loop pass and dirty-viewport short-circuit,
   ordered dithering, the quantized shape-vector LUT, glTF/PNG, audio, networking,
-  and packaging.
+  and publishing the `xre-cli` / `glyphgen` tools to crates.io.
+
+[Unreleased]: https://github.com/ulpian/xRenderEngine/compare/v0.0.1...HEAD
+[0.0.1]: https://github.com/ulpian/xRenderEngine/releases/tag/v0.0.1
