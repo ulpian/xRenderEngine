@@ -17,9 +17,9 @@ all-features = true
 workspace = true
 
 [dependencies]
-xre-core = { path = "../xre-core", version = "0.0.1" }
-xre-term = { path = "../xre-term", version = "0.0.1" }
-xre-render = { path = "../xre-render", version = "0.0.1", optional = true, default-features = false }
+xre-core = { path = "../xre-core", version = "0.1.0" }
+xre-term = { path = "../xre-term", version = "0.1.0" }
+xre-render = { path = "../xre-render", version = "0.1.0", optional = true, default-features = false }
 unicode-width = { workspace = true }
 
 [features]

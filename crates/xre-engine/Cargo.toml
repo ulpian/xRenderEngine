@@ -27,17 +27,17 @@ grid-raycaster = []
 dhat-heap = ["dep:dhat"]
 
 [dependencies]
-xre-core = { path = "../xre-core", version = "0.0.1" }
-xre-render = { path = "../xre-render", version = "0.0.1", default-features = false }
-xre-cello = { path = "../xre-cello", version = "0.0.1" }
-xre-term = { path = "../xre-term", version = "0.0.1" }
+xre-core = { path = "../xre-core", version = "0.1.0" }
+xre-render = { path = "../xre-render", version = "0.1.0", default-features = false }
+xre-cello = { path = "../xre-cello", version = "0.1.0" }
+xre-term = { path = "../xre-term", version = "0.1.0" }
 hecs = { workspace = true }
 thiserror = { workspace = true }
 dhat = { workspace = true, optional = true }
 
 [dev-dependencies]
 proptest = { workspace = true }
-xre-tui = { path = "../xre-tui", version = "0.0.1" }
+xre-tui = { path = "../xre-tui", version = "0.1.0" }
 insta = { workspace = true }
 criterion = { workspace = true }
 

@@ -452,7 +452,7 @@ checksum = "8babf46d4c1c9d92deac9f7be466f76dfc4482b6452fc5024b5e8daf6ffeb3ee"
 
 [[package]]
 name = "glyphgen"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "ab_glyph",
  "thiserror",
@@ -1595,7 +1595,7 @@ dependencies = [
 
 [[package]]
 name = "xre-cello"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "glam",
  "image",
@@ -1607,7 +1607,7 @@ dependencies = [
 
 [[package]]
 name = "xre-cli"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "glyphgen",
  "xre-rs",
@@ -1615,7 +1615,7 @@ dependencies = [
 
 [[package]]
 name = "xre-core"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "glam",
  "proptest",
@@ -1624,7 +1624,7 @@ dependencies = [
 
 [[package]]
 name = "xre-engine"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "criterion",
  "dhat",
@@ -1641,7 +1641,7 @@ dependencies = [
 
 [[package]]
 name = "xre-render"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "criterion",
  "dhat",
@@ -1654,7 +1654,7 @@ dependencies = [
 
 [[package]]
 name = "xre-rs"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "xre-cello",
  "xre-core",
@@ -1666,7 +1666,7 @@ dependencies = [
 
 [[package]]
 name = "xre-term"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "crossterm",
  "thiserror",
@@ -1676,7 +1676,7 @@ dependencies = [
 
 [[package]]
 name = "xre-tui"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "insta",
  "proptest",

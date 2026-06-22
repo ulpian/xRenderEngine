@@ -27,7 +27,7 @@ parallel = ["dep:rayon"]
 dhat-heap = ["dep:dhat"]
 
 [dependencies]
-xre-core = { path = "../xre-core", version = "0.0.1" }
+xre-core = { path = "../xre-core", version = "0.1.0" }
 glam = { workspace = true }
 rayon = { workspace = true, optional = true }
 dhat = { workspace = true, optional = true }
