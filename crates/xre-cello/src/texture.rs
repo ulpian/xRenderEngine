@@ -35,6 +35,21 @@ pub enum TextureError {
     },
 }
 
+/// Wrap a (possibly negative) texel coordinate into `0..n`.
+///
+/// For a power-of-two dimension this is `v & (n-1)`, which equals
+/// `v.rem_euclid(n)` for every `i64` but avoids the integer division on the hot
+/// bilinear path (4 texels × 2 axes per sample). Non-pow2 dimensions keep
+/// `rem_euclid`. Bit-identical either way.
+#[inline]
+fn wrap_coord(v: i64, n: u32) -> i64 {
+    if n.is_power_of_two() {
+        v & (i64::from(n) - 1)
+    } else {
+        v.rem_euclid(i64::from(n))
+    }
+}
+
 /// An RGB texture sampled by UV coordinates.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Texture {
@@ -101,8 +116,8 @@ impl Texture {
 
     #[inline]
     fn texel(&self, x: i64, y: i64) -> [u8; 3] {
-        let xi = x.rem_euclid(i64::from(self.width)) as usize;
-        let yi = y.rem_euclid(i64::from(self.height)) as usize;
+        let xi = wrap_coord(x, self.width) as usize;
+        let yi = wrap_coord(y, self.height) as usize;
         self.pixels[yi * self.width as usize + xi]
     }
 

@@ -20,6 +20,11 @@ use crate::shader::CellShader;
 
 /// Average the filled samples of a cell sub-region, returning
 /// `(mean_rgb, mean_luma, filled, total)`.
+///
+/// Reads the SoA planes directly (one `planes()` borrow, a flat index per
+/// sample) instead of the per-sample bounds-checked [`SampleBuffer::get`] — the
+/// shading loop runs this for every cell every frame, and the values/order are
+/// identical, so the output is byte-for-byte unchanged.
 fn region_stats(
     buf: &SampleBuffer,
     cx: u32,
@@ -30,21 +35,23 @@ fn region_stats(
     y1: u32,
 ) -> ([u8; 3], f32, u32, u32) {
     let (sx, sy) = buf.samples_per_cell();
-    let mut r = 0u32;
-    let mut g = 0u32;
-    let mut b = 0u32;
+    let (luma_p, rgb_p, depth_p) = buf.planes();
+    let width = buf.width() as usize;
+    let mut sum = [0u32; 3];
     let mut luma = 0.0f32;
     let mut filled = 0u32;
     let mut total = 0u32;
     for j in y0..y1.min(sy) {
+        let row_base = (cy * sy + j) as usize * width;
         for i in x0..x1.min(sx) {
             total += 1;
-            let s = buf.get(cx * sx + i, cy * sy + j);
-            if s.is_filled() {
-                r += u32::from(s.rgb[0]);
-                g += u32::from(s.rgb[1]);
-                b += u32::from(s.rgb[2]);
-                luma += s.luma;
+            let idx = row_base + (cx * sx + i) as usize;
+            if depth_p[idx].is_finite() {
+                let px = rgb_p[idx];
+                sum[0] += u32::from(px[0]);
+                sum[1] += u32::from(px[1]);
+                sum[2] += u32::from(px[2]);
+                luma += luma_p[idx];
                 filled += 1;
             }
         }
@@ -52,11 +59,55 @@ fn region_stats(
     if filled == 0 {
         return ([0, 0, 0], 0.0, 0, total);
     }
+    (mean_rgb(sum, filled), luma / filled as f32, filled, total)
+}
+
+/// Mean of an RGB sum over `filled` samples (`filled == 0` ⇒ black, since the sum
+/// is then zero too). Divides by `filled.max(1)` to avoid a branch on the hot path.
+#[inline]
+fn mean_rgb(sum: [u32; 3], filled: u32) -> [u8; 3] {
+    let n = filled.max(1);
+    [(sum[0] / n) as u8, (sum[1] / n) as u8, (sum[2] / n) as u8]
+}
+
+/// Mean RGB and filled-count for the top (`rows 0..mid`) and bottom
+/// (`rows mid..sy`) halves of a cell in a **single pass** over its samples
+/// (`HalfBlock` previously walked the block twice). Reads the planes directly;
+/// the per-half accumulation order matches the two old `region_stats` calls, so
+/// the result is byte-for-byte unchanged.
+fn halfblock_stats(buf: &SampleBuffer, cx: u32, cy: u32) -> ([u8; 3], u32, [u8; 3], u32) {
+    let (sx, sy) = buf.samples_per_cell();
+    let mid = sy / 2;
+    let (_, rgb_p, depth_p) = buf.planes();
+    let width = buf.width() as usize;
+    let mut top = [0u32; 3];
+    let mut bot = [0u32; 3];
+    let mut top_filled = 0u32;
+    let mut bot_filled = 0u32;
+    for j in 0..sy {
+        let row_base = (cy * sy + j) as usize * width;
+        let is_top = j < mid;
+        for i in 0..sx {
+            let idx = row_base + (cx * sx + i) as usize;
+            if depth_p[idx].is_finite() {
+                let px = rgb_p[idx];
+                let (acc, count) = if is_top {
+                    (&mut top, &mut top_filled)
+                } else {
+                    (&mut bot, &mut bot_filled)
+                };
+                acc[0] += u32::from(px[0]);
+                acc[1] += u32::from(px[1]);
+                acc[2] += u32::from(px[2]);
+                *count += 1;
+            }
+        }
+    }
     (
-        [(r / filled) as u8, (g / filled) as u8, (b / filled) as u8],
-        luma / filled as f32,
-        filled,
-        total,
+        mean_rgb(top, top_filled),
+        top_filled,
+        mean_rgb(bot, bot_filled),
+        bot_filled,
     )
 }
 
@@ -66,11 +117,7 @@ pub struct HalfBlock;
 
 impl CellShader for HalfBlock {
     fn shade(&self, buf: &SampleBuffer, cx: u32, cy: u32) -> Option<Cell> {
-        let (_, sy) = buf.samples_per_cell();
-        let mid = sy / 2;
-        let (sx, _) = buf.samples_per_cell();
-        let (top_rgb, _, top_filled, _) = region_stats(buf, cx, cy, 0, 0, sx, mid);
-        let (bot_rgb, _, bot_filled, _) = region_stats(buf, cx, cy, 0, mid, sx, sy);
+        let (top_rgb, top_filled, bot_rgb, bot_filled) = halfblock_stats(buf, cx, cy);
         if top_filled == 0 && bot_filled == 0 {
             return None;
         }

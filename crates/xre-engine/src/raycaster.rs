@@ -7,6 +7,8 @@
 //! colliders for the swept-AABB resolver
 //! (`RiftEngine-Plan/10-phase-5-game-engine.md` §5.6).
 
+use std::cell::RefCell;
+
 use xre_core::math::Vec2;
 use xre_core::math::Vec3;
 use xre_render::{Aabb, RowBand, Sample, SampleBuffer, TextureSampler};
@@ -303,28 +305,48 @@ impl Raycaster {
         // A camera-relative lift for the floor/ceiling bands near the light.
         let cam_lift = light.map_or(0.0, |l| l.brightness(pos) * 0.4);
 
-        let fill = |band: &mut RowBand| {
-            for sx in 0..w {
-                let span = column_span(map, pos, yaw, half_fov, fov, far, h, horizon, light, sx, w);
-                for y_local in 0..band.height() {
-                    let sample = shade_sample(
-                        &span,
-                        (band.y0() + y_local) as f32,
-                        horizon,
-                        cam_lift,
-                        h,
-                        wall_tex,
-                    );
-                    band.put(sx, y_local, sample);
-                }
-            }
-        };
-
-        match kind {
-            FillKind::Auto => buf.par_row_bands(fill),
-            FillKind::Serial => buf.par_row_bands_forced(false, fill),
-            FillKind::Parallel => buf.par_row_bands_forced(true, fill),
+        // Each column's DDA span is a pure function of the column and camera, so
+        // it is identical for every row band. Compute all `w` columns ONCE here
+        // (serial, cheap, deterministic) into a reused thread-local scratch — the
+        // per-band closure used to recompute them, which under rayon meant
+        // `threads*3` redundant DDA + light passes per frame. The parallel fill
+        // then only *reads* the shared slice, so the output stays byte-identical
+        // and each sample is still written exactly once. The scratch grows on the
+        // warm-up frame and is reused after, preserving the zero-alloc invariant.
+        thread_local! {
+            static SPANS: RefCell<Vec<ColumnSpan>> = const { RefCell::new(Vec::new()) };
         }
+        SPANS.with(|cell| {
+            let mut spans = cell.borrow_mut();
+            spans.clear();
+            spans.extend((0..w).map(|sx| {
+                column_span(map, pos, yaw, half_fov, fov, far, h, horizon, light, sx, w)
+            }));
+            let spans: &[ColumnSpan] = &spans;
+
+            let fill = |band: &mut RowBand| {
+                for sx in 0..w {
+                    let span = &spans[sx as usize];
+                    for y_local in 0..band.height() {
+                        let sample = shade_sample(
+                            span,
+                            (band.y0() + y_local) as f32,
+                            horizon,
+                            cam_lift,
+                            h,
+                            wall_tex,
+                        );
+                        band.put(sx, y_local, sample);
+                    }
+                }
+            };
+
+            match kind {
+                FillKind::Auto => buf.par_row_bands(fill),
+                FillKind::Serial => buf.par_row_bands_forced(false, fill),
+                FillKind::Parallel => buf.par_row_bands_forced(true, fill),
+            }
+        });
     }
 }
 

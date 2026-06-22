@@ -184,6 +184,11 @@ impl CellShader for LuminanceRamp {
     fn shade(&self, buf: &SampleBuffer, cx: u32, cy: u32) -> Option<Cell> {
         let (sx, sy) = buf.samples_per_cell();
         let total = (sx * sy) as f32;
+        // Read the SoA planes directly (flat index per sample) instead of the
+        // per-sample bounds-checked `get`; same values and accumulation order, so
+        // the shaded output is byte-for-byte identical.
+        let (luma_p, rgb_p, depth_p) = buf.planes();
+        let width = buf.width() as usize;
         let mut luma_sum = 0.0f32;
         let mut luma_max = 0.0f32;
         let mut r = 0u32;
@@ -192,15 +197,19 @@ impl CellShader for LuminanceRamp {
         let mut filled = 0u32;
         let mut depth_sum = 0.0f32;
         for j in 0..sy {
+            let row_base = (cy * sy + j) as usize * width;
             for i in 0..sx {
-                let s = buf.get(cx * sx + i, cy * sy + j);
-                if s.is_filled() {
-                    luma_sum += s.luma;
-                    luma_max = luma_max.max(s.luma);
-                    r += u32::from(s.rgb[0]);
-                    g += u32::from(s.rgb[1]);
-                    b += u32::from(s.rgb[2]);
-                    depth_sum += s.depth;
+                let idx = row_base + (cx * sx + i) as usize;
+                let depth = depth_p[idx];
+                if depth.is_finite() {
+                    let luma = luma_p[idx];
+                    let px = rgb_p[idx];
+                    luma_sum += luma;
+                    luma_max = luma_max.max(luma);
+                    r += u32::from(px[0]);
+                    g += u32::from(px[1]);
+                    b += u32::from(px[2]);
+                    depth_sum += depth;
                     filled += 1;
                 }
             }

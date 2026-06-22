@@ -10,7 +10,8 @@
 //! Move: W/A/S/D (hold two for diagonal) · look: move the mouse to turn the view
 //! (FPS-style); hold the pointer at a viewport edge to keep spinning, or ← / → to
 //! turn · fire: left-click (at the cursor) or <kbd>Space</kbd> (straight ahead) ·
-//! menu: h (frees the mouse) · quit: q.
+//! menu: h (frees the mouse) · color: c (toggle 256-palette to cut present
+//! bytes when the terminal is the bottleneck) · quit: q.
 //!
 //! Firing casts a ray into the level and bursts a muzzle flash plus sparks on the
 //! wall it strikes — a click lands them where the cursor is, Space down the centre.
@@ -31,11 +32,12 @@
 //! Press `l` to toggle latch mode; `h` pauses and opens the (clickable) menu.
 #![allow(clippy::suboptimal_flops)] // determinism: plain float math, no FMA
 
+use std::cell::RefCell;
 use std::path::Path;
 use std::time::{Duration, Instant};
 
 use xre_core::math::{UVec2, Vec2, Vec3};
-use xre_core::{Cell, CellBuffer, Color, Rect, Style};
+use xre_core::{Cell, CellBuffer, Color, ColorDepth, Rect, Style};
 use xre_engine::collide::move_and_slide;
 use xre_engine::raycaster::{PointLight2D, Raycaster, TileMap};
 use xre_engine::{Binding, FixedTimestep, FramePacer, InputMap, LatchAxis};
@@ -477,12 +479,18 @@ fn main() -> std::io::Result<()> {
     // mouse motion turns the view (relative FPS mouselook).
     let mut mouse_sens = 0.8f32;
     let mut move_speed = 0.4f32;
-    // Vertical supersampling for the viewport: 4 (crisp, the default) or 2 (4x
-    // fewer samples — the cheapest quality knob, toggled in Options).
-    let mut super_sy = 4u32;
+    // Vertical supersampling for the viewport: 2 (the default — half the raycast
+    // and shade samples) or 4 (crisper). The cheapest render-side quality knob,
+    // toggled in Options.
+    let mut super_sy = 2u32;
     // Whether walls use the brick texture; off = flat palette (skips the per-sample
     // texture fetch, cheaper). Toggled in Options.
     let mut textures_on = true;
+    // Cap colors to the 256-palette at present time. Truecolor + a moving 3D view
+    // repaints the whole viewport every frame; `38;5;N` is shorter than
+    // `38;2;R;G;B` and near-identical colors coalesce, so this slashes the bytes a
+    // terminal-I/O-bound present must push. Toggle with `c`. Off = full truecolor.
+    let mut color_256 = false;
 
     let mut player = new_player();
     // Overlay state: `h` toggles the pause menu; pickups and the exit raise their
@@ -647,6 +655,16 @@ fn main() -> std::io::Result<()> {
                                     latch = !latch;
                                     move_latch.clear();
                                     strafe_latch.clear();
+                                }
+                                // Toggle 256-color quantization (cuts present bytes
+                                // on a terminal-I/O-bound view; see `color_256`).
+                                KeyCode::Char('c') => {
+                                    color_256 = !color_256;
+                                    log.push(if color_256 {
+                                        "color: 256-palette (fewer present bytes)"
+                                    } else {
+                                        "color: truecolor"
+                                    });
                                 }
                                 // Fire down the centre of the view, and hide the
                                 // mouse cursor (keyboard aiming now).
@@ -1007,6 +1025,16 @@ fn main() -> std::io::Result<()> {
                 Overlay::Pickup => draw_pickup(&mut frame, cols[0], &overlay_msg),
                 Overlay::Exit => draw_exit(&mut frame, cols[0], &overlay_msg, exit_idx),
             }
+        }
+        // Apply the color-depth cap only when it changes (a change forces a full
+        // redraw, so we must not call it every frame).
+        let want_depth = if color_256 {
+            ColorDepth::Ansi256
+        } else {
+            caps.color
+        };
+        if presenter.color_depth() != want_depth {
+            presenter.set_color_depth(want_depth);
         }
         // Measure render (raycast + shade + draw) and present (diff + flush, which
         // blocks on the terminal) separately, so the HUD shows where time goes.
@@ -1456,6 +1484,38 @@ fn draw_exit(frame: &mut Frame, area: Rect, msg: &str, focus: usize) {
     }
 }
 
+/// The HUD's row split (minimap / status / log), memoized on `(area, map_height)`.
+///
+/// `Layout::split` allocates a `Vec<Rect>`, and the HUD is laid out every frame
+/// though its rects only change on resize — so cache them in a thread-local,
+/// mirroring `ensure_cols` for the top-level columns. Keeps the steady-state
+/// frame from allocating here.
+fn hud_rows(area: Rect, map_h: u32) -> [Rect; 3] {
+    // `(layout key, cached rows)`: the rows are valid while the area and map height
+    // are unchanged.
+    type HudRowCache = Option<((Rect, u32), [Rect; 3])>;
+    thread_local! {
+        static CACHE: RefCell<HudRowCache> = const { RefCell::new(None) };
+    }
+    CACHE.with(|c| {
+        let mut c = c.borrow_mut();
+        if let Some((key, rows)) = *c {
+            if key == (area, map_h) {
+                return rows;
+            }
+        }
+        let v = Layout::vertical([
+            Constraint::Len(map_h + 2),
+            Constraint::Len(7),
+            Constraint::Fill(1),
+        ])
+        .split(area);
+        let rows = [v[0], v[1], v[2]];
+        *c = Some(((area, map_h), rows));
+        rows
+    })
+}
+
 #[allow(clippy::too_many_arguments)]
 fn draw_hud(
     frame: &mut Frame,
@@ -1470,12 +1530,7 @@ fn draw_hud(
     render_ms: f32,
     present_ms: f32,
 ) {
-    let rows = Layout::vertical([
-        Constraint::Len(map.height() + 2),
-        Constraint::Len(7),
-        Constraint::Fill(1),
-    ])
-    .split(area);
+    let rows = hud_rows(area, map.height());
 
     // Minimap.
     let mp = Panel::new().border(Some(BorderSet::ASCII)).title("map");

@@ -249,9 +249,14 @@ impl Rasterizer {
     #[cfg(feature = "parallel")]
     fn should_parallelize(&self, buf: &SampleBuffer) -> bool {
         let samples = (buf.width() as usize) * (buf.height() as usize);
-        rayon::current_num_threads() >= 2
+        // Gate on the cheap, pure counts *first* so `current_num_threads()` stays
+        // last in the `&&` chain: a sub-threshold frame then never spins up rayon's
+        // global pool (and its threads' asynchronous startup allocations) for a draw
+        // that runs serially anyway — preserving the zero-alloc-per-frame invariant
+        // for small viewports, exactly as `SampleBuffer::should_band_parallel` does.
+        samples >= PARALLEL_MIN_SAMPLES
             && self.prims.len() >= PARALLEL_MIN_PRIMS
-            && samples >= PARALLEL_MIN_SAMPLES
+            && rayon::current_num_threads() >= 2
     }
 
     /// Serial fill: one band over the whole buffer, every primitive in order.

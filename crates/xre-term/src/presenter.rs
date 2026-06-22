@@ -124,6 +124,25 @@ impl<W: Write> Presenter<W> {
         self.force_redraw = true;
     }
 
+    /// The [`ColorDepth`] colors are resolved to before emission.
+    #[must_use]
+    pub const fn color_depth(&self) -> ColorDepth {
+        self.depth
+    }
+
+    /// Override the [`ColorDepth`] colors are resolved to at present time.
+    ///
+    /// Capping a truecolor terminal to [`ColorDepth::Ansi256`] makes each color
+    /// SGR shorter (`38;5;N` vs `38;2;R;G;B`) **and** collapses near-identical
+    /// colors onto the 256-entry palette, so adjacent cells coalesce and the
+    /// diffed stream shrinks dramatically — the main lever for a dense, fully
+    /// repainted truecolor 3D viewport that is terminal-I/O-bound. Forces a full
+    /// redraw so the on-screen record is re-resolved at the new depth.
+    pub const fn set_color_depth(&mut self, depth: ColorDepth) {
+        self.depth = depth;
+        self.force_redraw = true;
+    }
+
     /// Diff `frame` against what is on screen and flush the minimal update.
     ///
     /// `frame` must match the presenter's [`Presenter::size`]; if it does not
@@ -243,93 +262,103 @@ fn push_u32(out: &mut Vec<u8>, mut v: u32) {
     out.extend_from_slice(&digits[i..]);
 }
 
+/// Append one SGR parameter directly to `out`, opening the `CSI` (`\x1b[`) on the
+/// first param and inserting `;` separators thereafter. Tracking `started` lets us
+/// emit straight into the reusable scratch buffer with **no per-cell allocation**
+/// (the hot path repaints thousands of cells per frame — Gate G1's zero-alloc
+/// invariant). The byte output is identical to the previous `Vec<u16>`-join.
+#[inline]
+fn push_param(out: &mut Vec<u8>, started: &mut bool, p: u16) {
+    if *started {
+        out.push(b';');
+    } else {
+        out.extend_from_slice(b"\x1b[");
+        *started = true;
+    }
+    push_u32(out, u32::from(p));
+}
+
 /// Emit the minimal SGR sequence transitioning the terminal from `current` to
-/// `desired`. Only the parameters that changed are written.
+/// `desired`. Only the parameters that changed are written, straight into `out`.
 fn emit_sgr(out: &mut Vec<u8>, current: Style, desired: Style) {
     if current == desired {
         return;
     }
-    let mut params: Vec<u16> = Vec::new();
+    let mut started = false;
 
     // Attribute changes, set then reset.
     let add = |flag: Attrs| desired.attrs.contains(flag) && !current.attrs.contains(flag);
     let remove = |flag: Attrs| current.attrs.contains(flag) && !desired.attrs.contains(flag);
     if add(Attrs::BOLD) {
-        params.push(1);
+        push_param(out, &mut started, 1);
     }
     if add(Attrs::DIM) {
-        params.push(2);
+        push_param(out, &mut started, 2);
     }
     if add(Attrs::ITALIC) {
-        params.push(3);
+        push_param(out, &mut started, 3);
     }
     if add(Attrs::UNDERLINE) {
-        params.push(4);
+        push_param(out, &mut started, 4);
     }
     // Bold and dim share the 22 reset; emit it if either is being cleared.
     if remove(Attrs::BOLD) || remove(Attrs::DIM) {
-        params.push(22);
+        push_param(out, &mut started, 22);
         // Re-assert the one that should remain on.
         if desired.attrs.contains(Attrs::BOLD) {
-            params.push(1);
+            push_param(out, &mut started, 1);
         }
         if desired.attrs.contains(Attrs::DIM) {
-            params.push(2);
+            push_param(out, &mut started, 2);
         }
     }
     if remove(Attrs::ITALIC) {
-        params.push(23);
+        push_param(out, &mut started, 23);
     }
     if remove(Attrs::UNDERLINE) {
-        params.push(24);
+        push_param(out, &mut started, 24);
     }
 
     if current.fg != desired.fg {
-        push_color_params(&mut params, desired.fg, false);
+        push_color_params(out, &mut started, desired.fg, false);
     }
     if current.bg != desired.bg {
-        push_color_params(&mut params, desired.bg, true);
+        push_color_params(out, &mut started, desired.bg, true);
     }
 
-    if params.is_empty() {
-        return;
+    // `current != desired` always pushes at least one param, so `started` is set;
+    // close the sequence. (If nothing was pushed we emit nothing, as before.)
+    if started {
+        out.push(b'm');
     }
-    out.extend_from_slice(b"\x1b[");
-    for (i, p) in params.iter().enumerate() {
-        if i > 0 {
-            out.push(b';');
-        }
-        push_u32(out, u32::from(*p));
-    }
-    out.push(b'm');
 }
 
 /// Push the SGR parameters that select `color` for foreground (`is_bg=false`)
-/// or background (`is_bg=true`).
-fn push_color_params(params: &mut Vec<u16>, color: Color, is_bg: bool) {
+/// or background (`is_bg=true`) directly into `out` via [`push_param`].
+fn push_color_params(out: &mut Vec<u8>, started: &mut bool, color: Color, is_bg: bool) {
     match color {
-        Color::Default => params.push(if is_bg { 49 } else { 39 }),
+        Color::Default => push_param(out, started, if is_bg { 49 } else { 39 }),
         Color::Ansi16(i) => {
             let i = u16::from(i & 0x0F);
             let base = if is_bg { 40 } else { 30 };
             let bright_base = if is_bg { 100 } else { 90 };
             if i < 8 {
-                params.push(base + i);
+                push_param(out, started, base + i);
             } else {
-                params.push(bright_base + (i - 8));
+                push_param(out, started, bright_base + (i - 8));
             }
         }
         Color::Ansi256(i) => {
-            params.push(if is_bg { 48 } else { 38 });
-            params.push(5);
-            params.push(u16::from(i));
+            push_param(out, started, if is_bg { 48 } else { 38 });
+            push_param(out, started, 5);
+            push_param(out, started, u16::from(i));
         }
         Color::Rgb(r, g, b) => {
-            params.push(if is_bg { 48 } else { 38 });
-            params.push(2);
-            params.push(u16::from(r));
-            params.push(u16::from(g));
-            params.push(u16::from(b));
+            push_param(out, started, if is_bg { 48 } else { 38 });
+            push_param(out, started, 2);
+            push_param(out, started, u16::from(r));
+            push_param(out, started, u16::from(g));
+            push_param(out, started, u16::from(b));
         }
     }
 }

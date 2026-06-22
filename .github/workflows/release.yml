@@ -36,7 +36,17 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y musl-tools
+          # aarch64 musl cross-links on an x86_64 host: musl-tools only ships the
+          # x86_64 musl gcc, so without an aarch64 linker cargo falls back to the
+          # host `cc`/`ld`, which rejects AArch64 objects ("EM: 183, wrong format").
+          if [ "${{ matrix.target }}" = "aarch64-unknown-linux-musl" ]; then
+            sudo apt-get install -y gcc-aarch64-linux-gnu
+          fi
       - name: Build release binary
+        # Rust supplies musl's self-contained CRT/libc/libunwind, so the GNU
+        # aarch64 gcc only acts as the linker driver (ignored for other targets).
+        env:
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER: aarch64-linux-gnu-gcc
         run: cargo build --release -p xre-cli --target ${{ matrix.target }}
       - name: Package
         shell: bash
