@@ -68,6 +68,23 @@ impl OrbitController {
         self.distance = (self.distance * factor).clamp(0.2, 1000.0);
     }
 
+    /// Slide the target across the current view plane by `(right, up)` world
+    /// units, leaving yaw/pitch/distance untouched. Because the eye is derived
+    /// as `target + dir·distance`, moving the target translates the whole camera
+    /// in parallel — a true pan. The basis matches [`Transform::look_at`] using
+    /// the *smoothed* angles, so the deltas track screen right/up at any orbit
+    /// angle. Used by the image viewer to scroll a picture in 2D.
+    pub fn pan(&mut self, right: f32, up: f32) {
+        let (sy, cy) = self.cur_yaw.sin_cos();
+        let (sp, cp) = self.cur_pitch.sin_cos();
+        // `z_axis` points from the target toward the eye, exactly as in
+        // `Transform::look_at`; `right`/`up` are derived from it the same way.
+        let z_axis = Vec3::new(cp * sy, sp, cp * cy);
+        let right_vec = Vec3::Y.cross(z_axis).normalize_or_zero();
+        let up_vec = z_axis.cross(right_vec).normalize_or_zero();
+        self.target += right_vec * right + up_vec * up;
+    }
+
     /// Advance the damping toward the target angles over `dt` seconds.
     pub fn update(&mut self, dt: f32) {
         // Exponential smoothing independent of frame rate.
@@ -196,6 +213,26 @@ mod tests {
     fn orbit_eye_is_at_distance() {
         let o = OrbitController::new(Vec3::ZERO, 7.0);
         assert!((o.eye().length() - 7.0).abs() < 1e-3);
+    }
+
+    #[test]
+    fn orbit_pan_moves_target_along_screen_axes() {
+        // Face-on (yaw 0, pitch 0): screen-right is +X, screen-up is +Y, so a
+        // pan maps directly onto the world axes and leaves the orbit angles and
+        // distance untouched.
+        let mut o = OrbitController::new(Vec3::ZERO, 3.0);
+        o.yaw = 0.0;
+        o.pitch = 0.0;
+        for _ in 0..240 {
+            o.update(1.0 / 60.0); // settle cur_yaw/cur_pitch to the face-on pose
+        }
+        o.pan(1.0, 0.0);
+        assert!((o.target - Vec3::new(1.0, 0.0, 0.0)).length() < 1e-4);
+        o.pan(0.0, 2.0);
+        assert!((o.target - Vec3::new(1.0, 2.0, 0.0)).length() < 1e-4);
+        // Panning never disturbs the framing.
+        assert!((o.distance - 3.0).abs() < 1e-6);
+        assert_eq!((o.yaw, o.pitch), (0.0, 0.0));
     }
 
     #[test]

@@ -22,12 +22,13 @@ pub mod prelude {
     pub use crate::core::math::{Mat4, Quat, UVec2, Vec2, Vec3, Vec4};
     pub use crate::core::{Attrs, Cell, CellBuffer, Color, ColorDepth, Rect, Style, Transform};
     pub use crate::term::{
-        Capabilities, Event, EventQueue, Key, KeyCode, Modifiers, Presenter, TerminalGuard,
-        UnicodeLevel,
+        Capabilities, Event, EventQueue, GuardOptions, Key, KeyCode, KeyState, Modifiers,
+        MouseButton, MouseEvent, MouseKind, Presenter, TerminalGuard, UnicodeLevel,
     };
     pub use crate::tui::{
-        BorderSet, Constraint, Frame, Gauge, GridLayout, Layout, List, ListState, Log, Panel,
-        Spinner, Tabs, Text, Theme, Viewport3D, Widget,
+        viewport_gesture, BorderSet, Constraint, Frame, Gauge, GridLayout, Layout, List, ListState,
+        Log, MouseRouter, Panel, Scrollbar, ScrollbarOrientation, ScrollbarState, Spinner, Tabs,
+        Text, Theme, Viewport3D, ViewportGesture, Widget,
     };
 
     pub use crate::engine::{

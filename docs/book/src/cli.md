@@ -42,10 +42,10 @@ In interactive mode, the viewer is the project's manual QA harness. The controls
 | Key / input | Action |
 |-------------|--------|
 | mouse drag | orbit the camera |
-| `←` `→` `↑` `↓` | rotate (yaw / pitch) |
+| `←` `→` `↑` `↓` | orbit a mesh (yaw / pitch); pan an image in 2D |
 | mouse scroll | zoom in / out |
 | `+` or `=` | zoom in |
-| `-` | zoom out |
+| `-` (or Shift+`-`) | zoom out |
 | `m` | cycle lighting mode |
 | `c` | cycle cell shader (luminance ramp → shape vector → the Unicode modes) |
 | `q` / `Esc` | quit |

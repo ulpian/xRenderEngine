@@ -7,16 +7,30 @@
 //!
 //! Run with `cargo run -p xre-tui --example dashboard` (add `--ascii` for the
 //! degraded ASCII/mono rendering used on Linux VTs and minimal terminals). Press
-//! `Tab` to switch tabs, type into the command line, and `q` / `Esc` to quit.
+//! `Tab` (or click a tab) to switch views — Overview (a 2×2 meter grid + log),
+//! Metrics (the meters full-width), and Logs (the full log). Type into the command
+//! line, and `q` / `Esc` to quit.
+//!
+//! Mouse: click a tab to switch views, scroll the wheel over the log to scroll it,
+//! drag the log's scrollbar, and click the command line to position the cursor.
+//! (Hold Shift / Option to select text while mouse capture is on.)
 
 use std::time::Duration;
 
-use xre_core::{Attrs, CellBuffer, Color, Style};
-use xre_term::{Capabilities, Event, EventQueue, KeyCode, Presenter, TerminalGuard};
-use xre_tui::{
-    BorderSet, Constraint, Frame, Gauge, GridLayout, Input, Layout, Log, Panel, Sparkline, Tabs,
-    Text, Theme, Widget,
+use xre_core::{CellBuffer, Color, Rect, Style};
+use xre_term::{
+    Capabilities, Event, EventQueue, KeyCode, KeyState, MouseEvent, Presenter, TerminalGuard,
 };
+use xre_tui::{
+    BorderSet, Constraint, FocusId, Frame, Gauge, GridLayout, Input, Layout, Log, MouseRouter,
+    Panel, Scrollbar, ScrollbarOrientation, Sparkline, Tabs, Theme, Widget,
+};
+
+/// Hit-test ids for the mouse-interactive regions (see [`App::handle_mouse`]).
+const TAB_ID: FocusId = FocusId(0);
+const LOG_ID: FocusId = FocusId(1);
+const LOG_BAR_ID: FocusId = FocusId(2);
+const INPUT_ID: FocusId = FocusId(3);
 
 struct App {
     ascii: bool,
@@ -28,6 +42,12 @@ struct App {
     log: Log,
     input: Input,
     running: bool,
+    // Mouse routing: rebuilt each render, consumed by the next frame's input.
+    router: MouseRouter,
+    tab_rect: Rect,
+    log_view: Rect,
+    log_track: Rect,
+    input_rect: Rect,
 }
 
 impl App {
@@ -49,6 +69,11 @@ impl App {
             log,
             input: Input::new().focused(true),
             running: true,
+            router: MouseRouter::new(),
+            tab_rect: Rect::default(),
+            log_view: Rect::default(),
+            log_track: Rect::default(),
+            input_rect: Rect::default(),
         }
     }
 
@@ -91,24 +116,65 @@ impl App {
     }
 
     fn handle(&mut self, ev: &Event) {
-        let Event::Key(k) = ev else { return };
-        match k.code {
-            KeyCode::Char('q') | KeyCode::Esc => self.running = false,
-            KeyCode::Tab => self.tab = (self.tab + 1) % self.tabs.len(),
-            KeyCode::Enter => {
-                if let Some(line) = self.input.handle_key(*k) {
-                    if !line.is_empty() {
-                        self.log.push(format!("> {line}"));
+        match ev {
+            // Act on press/repeat only; releases (kitty protocol) drive nothing
+            // here and must not double-trigger.
+            Event::Key(k) if k.state != KeyState::Release => match k.code {
+                KeyCode::Char('q') | KeyCode::Esc => self.running = false,
+                KeyCode::Tab => self.tab = (self.tab + 1) % self.tabs.len(),
+                KeyCode::Enter => {
+                    if let Some(line) = self.input.handle_key(*k) {
+                        if !line.is_empty() {
+                            self.log.push(format!("> {line}"));
+                        }
                     }
                 }
-            }
-            _ => {
-                self.input.handle_key(*k);
-            }
+                _ => {
+                    self.input.handle_key(*k);
+                }
+            },
+            Event::Mouse(m) => self.handle_mouse(m),
+            _ => {}
         }
     }
 
-    fn render(&self, buf: &mut CellBuffer) {
+    /// Route a mouse event to the region under the cursor (regions were
+    /// registered during the previous frame's render).
+    fn handle_mouse(&mut self, m: &MouseEvent) {
+        let Some(id) = self.router.route(m) else {
+            return;
+        };
+        match id {
+            TAB_ID => {
+                let hit = Tabs::new(&self.tabs, self.tab).handle_mouse(m, self.tab_rect);
+                if let Some(idx) = hit {
+                    self.tab = idx;
+                }
+            }
+            LOG_ID => {
+                self.log.handle_mouse(m, self.log_view);
+            }
+            LOG_BAR_ID => {
+                let vp = self.log_view.height() as usize;
+                let mut state = self.log.scrollbar_state(self.log_view.height() as u16);
+                if Scrollbar::new(ScrollbarOrientation::VerticalRight).handle_mouse(
+                    m,
+                    self.log_track,
+                    &mut state,
+                ) {
+                    self.log.scroll_to(state.get_position(), vp);
+                }
+            }
+            INPUT_ID => {
+                self.input.handle_mouse(m, self.input_rect);
+            }
+            _ => {}
+        }
+    }
+
+    fn render(&mut self, buf: &mut CellBuffer) {
+        // Rebuild the mouse hit-regions for this frame; routed next frame.
+        self.router.begin_frame();
         let bg = if self.ascii {
             Style::DEFAULT
         } else {
@@ -130,6 +196,8 @@ impl App {
             .active_style(self.theme.style("tabs.active"))
             .inactive_style(self.theme.style("tabs.inactive"))
             .render(rows[0], &mut frame);
+        self.tab_rect = rows[0];
+        self.router.register(TAB_ID, rows[0]);
 
         self.render_body(rows[1], &mut frame);
 
@@ -141,9 +209,43 @@ impl App {
             .title_style(self.theme.style("panel.title"));
         let inner = panel.render(rows[2], &mut frame);
         self.input.render(inner, &mut frame);
+        self.input_rect = inner;
+        self.router.register(INPUT_ID, inner);
     }
 
-    fn render_body(&self, area: xre_core::Rect, frame: &mut Frame) {
+    /// Each tab shows a distinct view, so clicking (or pressing Tab) visibly
+    /// switches content.
+    fn render_body(&mut self, area: Rect, frame: &mut Frame) {
+        match self.tab {
+            0 => self.render_overview(area, frame),
+            1 => self.render_metrics(area, frame),
+            _ => self.render_logs(area, frame),
+        }
+    }
+
+    /// A panelled gauge + sparkline for series `i` drawn into `cell`.
+    fn render_meter(&self, cell: Rect, i: usize, label: &str, frame: &mut Frame) {
+        let panel = Panel::new()
+            .border(Some(self.border()))
+            .border_style(self.theme.style("panel.border"))
+            .title(label)
+            .title_style(self.theme.style("panel.title"));
+        let inner = panel.render(cell, frame);
+        let split = Layout::vertical([Constraint::Len(1), Constraint::Fill(1)]).split(inner);
+        Gauge::new(self.gauge_ratio(i))
+            .ascii(self.ascii)
+            .bar_style(self.theme.style("gauge.bar"))
+            .bg_style(self.theme.style("gauge.bg"))
+            .label(format!("{:.0}%", self.gauge_ratio(i) * 100.0))
+            .render(split[0], frame);
+        Sparkline::new(self.series[i].clone())
+            .max(100.0)
+            .style(self.theme.style("sparkline"))
+            .render(split[1], frame);
+    }
+
+    /// Overview tab: a 2×2 grid of the three meters plus a scrollable log.
+    fn render_overview(&mut self, area: Rect, frame: &mut Frame) {
         let grid = GridLayout::new(
             [Constraint::Fill(1), Constraint::Fill(1)],
             [Constraint::Fill(1), Constraint::Fill(1)],
@@ -153,53 +255,54 @@ impl App {
 
         let labels = ["cpu", "mem", "net"];
         for (i, label) in labels.iter().enumerate() {
-            let cell = grid[i / 2][i % 2];
-            let panel = Panel::new()
-                .border(Some(self.border()))
-                .border_style(self.theme.style("panel.border"))
-                .title(*label)
-                .title_style(self.theme.style("panel.title"));
-            let inner = panel.render(cell, frame);
-            let split = Layout::vertical([Constraint::Len(1), Constraint::Fill(1)]).split(inner);
-            Gauge::new(self.gauge_ratio(i))
-                .ascii(self.ascii)
-                .bar_style(self.theme.style("gauge.bar"))
-                .bg_style(self.theme.style("gauge.bg"))
-                .label(format!("{:.0}%", self.gauge_ratio(i) * 100.0))
-                .render(split[0], frame);
-            Sparkline::new(self.series[i].clone())
-                .max(100.0)
-                .style(self.theme.style("sparkline"))
-                .render(split[1], frame);
+            self.render_meter(grid[i / 2][i % 2], i, label, frame);
         }
+        self.render_log_panel(grid[1][1], frame);
+    }
 
-        // Fourth cell: the log.
-        let cell = grid[1][1];
+    /// Metrics tab: the three meters stacked full-width for a closer look.
+    fn render_metrics(&self, area: Rect, frame: &mut Frame) {
+        let rows = Layout::vertical([
+            Constraint::Fill(1),
+            Constraint::Fill(1),
+            Constraint::Fill(1),
+        ])
+        .split(area);
+        let labels = ["cpu", "mem", "net"];
+        for (i, label) in labels.iter().enumerate() {
+            self.render_meter(rows[i], i, label, frame);
+        }
+    }
+
+    /// Logs tab: the log filling the whole body with its scrollbar.
+    fn render_logs(&mut self, area: Rect, frame: &mut Frame) {
+        self.render_log_panel(area, frame);
+    }
+
+    /// Draw the bordered log panel into `area` with a draggable scrollbar on its
+    /// right edge, and register its hit-regions for the mouse router.
+    fn render_log_panel(&mut self, area: Rect, frame: &mut Frame) {
         let panel = Panel::new()
             .border(Some(self.border()))
             .border_style(self.theme.style("panel.border"))
             .title("log")
             .title_style(self.theme.style("panel.title"));
-        let inner = panel.render(cell, frame);
-        if self.tab == 2 {
-            self.log.render(inner, frame);
-        } else {
-            Text::styled(
-                "switch to the Logs tab to follow output",
-                Style::DEFAULT.with_attrs(Attrs::DIM),
-            )
-            .wrap(true)
-            .render_into(inner, frame);
-            self.log.render(
-                xre_core::Rect::new(
-                    inner.left(),
-                    inner.top() + 1,
-                    inner.width(),
-                    inner.height().saturating_sub(1),
-                ),
-                frame,
-            );
-        }
+        let inner = panel.render(area, frame);
+        let cols = Layout::horizontal([Constraint::Fill(1), Constraint::Len(1)]).split(inner);
+        let (content, track) = (cols[0], cols[1]);
+        self.log.render(content, frame);
+
+        let mut sb_state = self.log.scrollbar_state(content.height() as u16);
+        Scrollbar::new(ScrollbarOrientation::VerticalRight)
+            .ascii(self.ascii)
+            .track_style(self.theme.style("scrollbar.track"))
+            .thumb_style(self.theme.style("scrollbar.thumb"))
+            .render_stateful(track, frame, &mut sb_state);
+
+        self.log_view = content;
+        self.log_track = track;
+        self.router.register(LOG_ID, content);
+        self.router.register(LOG_BAR_ID, track);
     }
 }
 

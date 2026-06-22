@@ -325,6 +325,10 @@ The example needs its feature flag:
 cargo run -p xre-engine --example rift-fps --features grid-raycaster
 ```
 
-Move with `W`/`A`/`S`/`D`, turn with `←`/`→`, quit with `q`. Its source is the
-canonical reference for stitching the loop, input, collision, raycaster, and TUI
-into one artifact.
+Move with `W`/`A`/`S`/`D`, turn with `←`/`→` or by moving the mouse (left/right
+turns, up/down tilts the view while you stay on the floor), and quit with `q`.
+The brick-textured walls are lit by a lamp at the top of the map. Each pickup
+pops a **Confirm** message; the exit pops a win screen with **Exit game** /
+**Restart**; `h` opens the pause menu and frees the mouse for clicking. Its
+source is the canonical reference for stitching the loop, input, collision,
+raycaster, and TUI into one artifact.

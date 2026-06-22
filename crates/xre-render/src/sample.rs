@@ -9,6 +9,13 @@
 
 use xre_core::math::UVec2;
 
+/// Below this many samples a row-band fill stays serial — rayon's per-call
+/// overhead isn't worth it for tiny viewports. Mirrors the rasterizer's
+/// `PARALLEL_MIN_SAMPLES` intent (the raycaster's per-band work is lighter, so
+/// the bar is lower).
+#[cfg(feature = "parallel")]
+const PARALLEL_FILL_MIN_SAMPLES: usize = 8192;
+
 /// One sub-cell sample: scalar luma, color, and depth.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Sample {
@@ -271,16 +278,68 @@ impl SampleBuffer {
                 width,
             })
     }
+
+    /// Fill the buffer in disjoint horizontal row bands, handing each [`RowBand`]
+    /// to `f`. With the `parallel` feature on and a large enough buffer the bands
+    /// run concurrently across rayon; otherwise a single serial band covers the
+    /// whole buffer. Because the bands are disjoint and `f` writes each sample
+    /// exactly once, the result is **byte-identical** regardless of thread count —
+    /// the determinism guarantee the grid raycaster relies on. `f` may recompute
+    /// per-column state once per band; that's deterministic, so it doesn't affect
+    /// the output.
+    pub fn par_row_bands(&mut self, f: impl Fn(&mut RowBand) + Sync) {
+        self.par_row_bands_forced(self.should_band_parallel(), f);
+    }
+
+    /// Like [`SampleBuffer::par_row_bands`] but forces the serial or parallel path.
+    /// Exposed for the determinism gate that asserts the two are byte-identical;
+    /// prefer [`SampleBuffer::par_row_bands`] in normal code. Requesting `parallel`
+    /// without the `parallel` feature compiled in runs serially.
+    #[doc(hidden)]
+    pub fn par_row_bands_forced(&mut self, parallel: bool, f: impl Fn(&mut RowBand) + Sync) {
+        #[cfg(feature = "parallel")]
+        if parallel {
+            use rayon::iter::ParallelIterator;
+            let bands = (rayon::current_num_threads() as u32 * 3).max(1);
+            let band_rows = self.height.div_ceil(bands).max(1);
+            self.par_row_bands_mut(band_rows)
+                .for_each(|mut band| f(&mut band));
+            return;
+        }
+        let _ = parallel;
+        let height = self.height.max(1);
+        for mut band in self.row_bands_mut(height) {
+            f(&mut band);
+        }
+    }
+
+    /// Whether a row-band fill has enough samples (and threads) to be worth
+    /// parallelizing. Always `false` without the `parallel` feature.
+    #[cfg(feature = "parallel")]
+    fn should_band_parallel(&self) -> bool {
+        let samples = (self.width as usize) * (self.height as usize);
+        // Gate on the cheap, pure sample count *first*: a sub-threshold buffer
+        // then never calls `current_num_threads()`, which would otherwise spin up
+        // rayon's global pool (and its threads' asynchronous startup allocations)
+        // for a frame that renders serially anyway — breaking the
+        // zero-alloc-per-frame invariant for small viewports.
+        samples >= PARALLEL_FILL_MIN_SAMPLES && rayon::current_num_threads() >= 2
+    }
+
+    #[cfg(not(feature = "parallel"))]
+    #[allow(clippy::unused_self)]
+    const fn should_band_parallel(&self) -> bool {
+        false
+    }
 }
 
-/// A disjoint horizontal slice of the sample planes: the unit of row-parallel
-/// rasterization (Stage 4.5). Owns the rows `[y0, y0 + height)` of the buffer, so
-/// distinct bands never alias and can be written on separate threads.
-//
-// `pub(crate)` is load-bearing: the `raster` module fills these. The nursery lint
-// reads it as redundant only because `sample` itself is private.
-#[allow(clippy::redundant_pub_crate)]
-pub(crate) struct RowBand<'a> {
+/// A disjoint horizontal slice of the sample planes — the unit of row-parallel
+/// rasterization and raycasting (Stage 4.5).
+///
+/// Owns the rows `[y0, y0 + height)` of the buffer, so distinct bands never alias
+/// and can be written on separate threads. Handed to the closure passed to
+/// [`SampleBuffer::par_row_bands`].
+pub struct RowBand<'a> {
     luma: &'a mut [f32],
     rgb: &'a mut [[u8; 3]],
     depth: &'a mut [f32],
@@ -291,14 +350,23 @@ pub(crate) struct RowBand<'a> {
 impl RowBand<'_> {
     /// The first global sample-row index this band covers.
     #[inline]
-    pub(crate) const fn y0(&self) -> u32 {
+    #[must_use]
+    pub const fn y0(&self) -> u32 {
         self.y0
     }
 
     /// The number of sample rows in this band.
     #[inline]
-    pub(crate) const fn height(&self) -> u32 {
+    #[must_use]
+    pub const fn height(&self) -> u32 {
         (self.luma.len() / self.width as usize) as u32
+    }
+
+    /// The sample-grid width (same for every band).
+    #[inline]
+    #[must_use]
+    pub const fn width(&self) -> u32 {
+        self.width
     }
 
     /// Depth-tested write at band-local row `y_local` (`0..height`) and column
@@ -311,6 +379,17 @@ impl RowBand<'_> {
             self.rgb[idx] = sample.rgb;
             self.depth[idx] = sample.depth;
         }
+    }
+
+    /// Unconditional write (no depth test) at band-local row `y_local` (`0..height`)
+    /// and column `x` — the band-local [`SampleBuffer::put`], used by the raycaster
+    /// which paints every sample exactly once.
+    #[inline]
+    pub fn put(&mut self, x: u32, y_local: u32, sample: Sample) {
+        let idx = (y_local as usize) * (self.width as usize) + x as usize;
+        self.luma[idx] = sample.luma;
+        self.rgb[idx] = sample.rgb;
+        self.depth[idx] = sample.depth;
     }
 }
 

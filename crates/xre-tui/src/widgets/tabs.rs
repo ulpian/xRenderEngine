@@ -1,6 +1,7 @@
 //! [`Tabs`]: a horizontal row of selectable labels.
 
 use xre_core::{Attrs, Rect, Style};
+use xre_term::{MouseButton, MouseEvent, MouseKind};
 
 use crate::frame::Frame;
 use crate::widget::Widget;
@@ -47,6 +48,45 @@ impl<'a> Tabs<'a> {
     pub const fn divider(mut self, divider: char) -> Self {
         self.divider = divider;
         self
+    }
+
+    /// The index of the tab whose label covers cell `(col, row)`, if any.
+    ///
+    /// Re-walks the exact layout used by [`Tabs::render`] (`" {title} "` labels
+    /// separated by 3-cell `" {divider} "` gaps); a click on a divider yields
+    /// `None`.
+    #[must_use]
+    pub fn hit(&self, area: Rect, col: u32, row: u32) -> Option<usize> {
+        if area.is_empty() || row != area.top() {
+            return None;
+        }
+        let mut x = area.left();
+        for (i, title) in self.titles.iter().enumerate() {
+            if x >= area.right() {
+                break;
+            }
+            if i > 0 {
+                x += 3; // " {divider} "
+            }
+            let label_w = title.chars().count() as u32 + 2; // " {title} "
+            if col >= x && col < x + label_w {
+                return Some(i);
+            }
+            x += label_w;
+        }
+        None
+    }
+
+    /// Handle a mouse event against the strip at `area`.
+    ///
+    /// Returns the index of the tab a left click landed on (the application owns
+    /// the active index and applies it), or `None`.
+    #[must_use]
+    pub fn handle_mouse(&self, ev: &MouseEvent, area: Rect) -> Option<usize> {
+        if ev.kind == MouseKind::Down(MouseButton::Left) {
+            return self.hit(area, ev.col, ev.row);
+        }
+        None
     }
 }
 
@@ -107,5 +147,20 @@ mod tests {
             }
         }
         assert!(found_bold, "active tab should be bold");
+    }
+
+    #[test]
+    fn hit_maps_columns_to_tabs() {
+        let titles: Vec<String> = vec!["one".into(), "two".into(), "three".into()];
+        let tabs = Tabs::new(&titles, 0);
+        let area = Rect::new(0, 0, 30, 1);
+        // " one " = cols 0..5; " │ " = 5..8; " two " = 8..13; " │ " = 13..16;
+        // " three " = 16..23.
+        assert_eq!(tabs.hit(area, 0, 0), Some(0));
+        assert_eq!(tabs.hit(area, 4, 0), Some(0));
+        assert_eq!(tabs.hit(area, 6, 0), None, "divider is not a tab");
+        assert_eq!(tabs.hit(area, 9, 0), Some(1));
+        assert_eq!(tabs.hit(area, 18, 0), Some(2));
+        assert_eq!(tabs.hit(area, 1, 1), None, "wrong row");
     }
 }

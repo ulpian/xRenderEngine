@@ -43,6 +43,8 @@ impl Default for Theme {
             Style::fg(Color::Rgb(0, 0, 0)).with_bg(Color::Rgb(220, 220, 220)),
         );
         t.set("log.line", Style::DEFAULT);
+        t.set("scrollbar.track", fg(60, 70, 85));
+        t.set("scrollbar.thumb", fg(120, 200, 255));
         t.set("focus.ring", fg(255, 200, 80));
         t
     }
@@ -72,6 +74,7 @@ impl Theme {
         t.set("tabs.active", Style::DEFAULT.with_attrs(Attrs::BOLD));
         t.set("tabs.inactive", Style::DEFAULT.with_attrs(Attrs::DIM));
         t.set("input.cursor", Style::DEFAULT.with_attrs(Attrs::UNDERLINE));
+        t.set("scrollbar.thumb", Style::DEFAULT.with_attrs(Attrs::BOLD));
         t.set("focus.ring", Style::DEFAULT.with_attrs(Attrs::BOLD));
         t
     }

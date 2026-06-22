@@ -69,11 +69,53 @@ let _guard = TerminalGuard::enter()?; // raw mode + alt screen, cursor hidden
 // guard drops here → terminal restored
 ```
 
-`enter()` enables raw mode, switches to the alternate screen, and hides the cursor.
-`Drop` reverses all three. Critically, `enter()` also installs (once) a **panic
-hook** that restores the terminal *before* delegating to the previous hook, so even
-an unwinding panic leaves a clean screen with the panic message still printed. The
+`enter()` enables raw mode, switches to the alternate screen, hides the cursor,
+enables **mouse capture**, and — where the terminal supports it — turns on the
+**keyboard enhancement protocol** (see below). `Drop` reverses them all (mouse
+capture and the enhancement flags are disabled *before* leaving the alternate
+screen so no stray reporting escapes leak into the shell). Critically, `enter()`
+also installs (once) a **panic hook** that restores the terminal — capture and
+enhancement included — *before* delegating to the previous hook, so even an
+unwinding panic leaves a clean screen with the panic message still printed. The
 guard is `#[must_use]`: bind it to a name, not `_`, or it drops immediately.
+
+## Mouse capture and text selection
+
+Mouse capture is on by default so any UI element can be driven with the mouse. The
+catch: while captured, the terminal forwards mouse actions to the application instead
+of performing its own click-drag text selection. Users can still select and copy by
+holding **Shift** (xterm, GNOME Terminal, most others) or **Option** (macOS Terminal,
+iTerm2), which bypasses the application. If an app would rather keep native selection,
+opt out with `TerminalGuard::enter_with(GuardOptions { mouse: false, ..Default::default() })`.
+The `Capabilities` probe also exposes an advisory `mouse` flag (true for any non-`dumb`
+`TERM`); the guard, not the probe, decides whether to actually capture.
+
+## Keyboard protocol and simultaneous keys
+
+In their default mode terminals never report key *releases* and only auto-repeat
+the **last** key held, so two keys at once (e.g. **W+D** for a diagonal) can't be
+tracked. The fix is the **kitty keyboard protocol**: when `enter()` finds the
+terminal supports it (`crossterm::terminal::supports_keyboard_enhancement`), it
+pushes `REPORT_EVENT_TYPES | REPORT_ALL_KEYS_AS_ESCAPE_CODES`, so every key
+arrives as a distinct press, auto-repeat, or release. Each `Event::Key` then
+carries a `KeyState` (`Press` / `Repeat` / `Release`); without the protocol every
+event is a `Press`. Query whether it took effect with
+`TerminalGuard::keyboard_enhanced()`.
+
+Because releases are now delivered, **every key consumer except the input map must
+ignore `KeyState::Release`** (and usually `Repeat` for discrete actions), or a
+single keypress fires twice. Widgets like `Input` already do this internally.
+
+`xre-engine`'s `InputMap` consumes all three states to maintain a per-key
+*down-set*, so `held`/`axis` report genuinely simultaneous keys. Call
+`InputMap::set_release_reporting(guard.keyboard_enhanced())`: with releases a key
+is held from press to release; without them, held is synthesised with a short
+grace window (it smooths single-key movement but can't sustain a true multi-key
+hold). For those terminals, pair it with `LatchAxis` — a press *sets* a sticky
+direction (idempotent, so holding a key keeps moving rather than flipping it, and
+W+D stay set together for a sustained diagonal); a stop key clears it. Protocol
+support today: kitty, ghostty, foot, WezTerm, recent Alacritty; **not** Apple
+Terminal.app or stock xterm.
 
 ## Per-terminal notes
 

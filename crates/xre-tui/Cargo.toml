@@ -33,6 +33,7 @@ parallel = ["xre-render?/parallel"]
 
 [dev-dependencies]
 insta = { workspace = true }
+proptest = { workspace = true }
 
 [[example]]
 name = "dashboard"

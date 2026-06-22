@@ -17,22 +17,42 @@ all-features = true
 workspace = true
 
 [features]
-default = []
+default = ["parallel"]
+# Row-parallel raycasting via xre-render's rayon path (Stage 4.5). Default-on; the
+# serial path is byte-identical, so this only changes throughput, never output.
+parallel = ["xre-render/parallel"]
 grid-raycaster = []
+# Opt-in harness feature: links dhat so the raycaster zero-alloc test can profile
+# a warm frame (dhat installs a global allocator, so it lives behind a flag).
+dhat-heap = ["dep:dhat"]
 
 [dependencies]
 xre-core = { path = "../xre-core", version = "0.0.1" }
-xre-render = { path = "../xre-render", version = "0.0.1" }
+xre-render = { path = "../xre-render", version = "0.0.1", default-features = false }
 xre-cello = { path = "../xre-cello", version = "0.0.1" }
 xre-term = { path = "../xre-term", version = "0.0.1" }
 hecs = { workspace = true }
 thiserror = { workspace = true }
+dhat = { workspace = true, optional = true }
 
 [dev-dependencies]
 proptest = { workspace = true }
 xre-tui = { path = "../xre-tui", version = "0.0.1" }
+insta = { workspace = true }
+criterion = { workspace = true }
 
 [[example]]
 name = "rift-fps"
 path = "examples/rift_fps.rs"
 required-features = ["grid-raycaster"]
+
+[[bench]]
+name = "raycaster"
+harness = false
+required-features = ["grid-raycaster"]
+
+# The raycaster zero-alloc gate needs the dhat allocator linked, so it lives in
+# its own target behind the `dhat-heap` feature.
+[[test]]
+name = "raycaster_zero_alloc"
+required-features = ["dhat-heap", "grid-raycaster"]

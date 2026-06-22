@@ -23,6 +23,7 @@ pub mod anim;
 pub mod collide;
 pub mod ecs;
 mod input_map;
+mod latch;
 #[cfg(feature = "grid-raycaster")]
 pub mod raycaster;
 mod time;
@@ -30,6 +31,7 @@ mod time;
 pub use anim::{Animator, Clip, Easing, PlayMode, Track, Tween};
 pub use ecs::{Schedule, World};
 pub use input_map::{Binding, InputMap};
+pub use latch::LatchAxis;
 pub use time::{FixedTimestep, FramePacer, Time};
 
 use std::time::Instant;

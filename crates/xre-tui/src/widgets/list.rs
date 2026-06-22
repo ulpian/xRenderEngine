@@ -1,9 +1,12 @@
 //! [`List`]: a scrollable, single-selection list with a sticky viewport.
 
+use xre_core::math::UVec2;
 use xre_core::{Rect, Style};
+use xre_term::{MouseButton, MouseEvent, MouseKind};
 
 use crate::frame::Frame;
 use crate::widget::Widget;
+use crate::widgets::ScrollbarState;
 
 /// Persistent selection + scroll state for a [`List`].
 ///
@@ -28,6 +31,27 @@ impl ListState {
     #[must_use]
     pub const fn selected(&self) -> usize {
         self.selected
+    }
+
+    /// The total number of items (the scrollbar's content length).
+    #[must_use]
+    pub const fn content_length(&self) -> usize {
+        self.len
+    }
+
+    /// The index of the first visible item (the current scroll offset).
+    #[must_use]
+    pub const fn offset(&self) -> usize {
+        self.offset
+    }
+
+    /// A [`ScrollbarState`] describing this list within a `viewport`-row area,
+    /// ready to render a [`crate::Scrollbar`] alongside the list.
+    #[must_use]
+    pub const fn scrollbar_state(&self, viewport: u16) -> ScrollbarState {
+        ScrollbarState::new(self.len)
+            .viewport_length(viewport as usize)
+            .position(self.offset)
     }
 
     /// Set the number of items, clamping the selection into range.
@@ -114,6 +138,40 @@ impl<'a> List<'a> {
         self
     }
 
+    /// Handle a mouse event against the list drawn at `area`, mutating `state`.
+    ///
+    /// A left click selects the item under the cursor; the scroll wheel moves the
+    /// selection (which scrolls the viewport via [`ListState`]). Returns `true`
+    /// if the event was consumed.
+    pub fn handle_mouse(&self, ev: &MouseEvent, area: Rect, state: &mut ListState) -> bool {
+        if area.is_empty() {
+            return false;
+        }
+        match ev.kind {
+            MouseKind::Down(MouseButton::Left) => {
+                if !area.contains(UVec2::new(ev.col, ev.row)) {
+                    return false;
+                }
+                let row = (ev.row - area.top()) as usize;
+                let idx = state.offset() + row;
+                if idx < state.content_length() {
+                    state.select(idx);
+                    return true;
+                }
+                false
+            }
+            MouseKind::ScrollUp => {
+                state.select_prev();
+                true
+            }
+            MouseKind::ScrollDown => {
+                state.select_next();
+                true
+            }
+            _ => false,
+        }
+    }
+
     /// Render against `state`, updating its scroll offset to keep the selection
     /// visible. This is the stateful entry point; the [`Widget`] impl renders
     /// without a selection.
@@ -189,6 +247,33 @@ mod tests {
         let r = rows(&buf);
         assert!(r[1].contains("item4"));
         assert!(r[0].contains("item3"));
+    }
+
+    #[test]
+    fn click_selects_row_under_cursor() {
+        use xre_term::Modifiers;
+        let items: Vec<String> = (0..5).map(|i| format!("item{i}")).collect();
+        let mut state = ListState::new();
+        state.set_len(items.len());
+        let list = List::new(&items);
+        let area = Rect::new(0, 0, 8, 5);
+        let click = MouseEvent {
+            kind: MouseKind::Down(MouseButton::Left),
+            col: 1,
+            row: 2,
+            mods: Modifiers::NONE,
+        };
+        assert!(list.handle_mouse(&click, area, &mut state));
+        assert_eq!(state.selected(), 2);
+        // Wheel down advances the selection.
+        let wheel = MouseEvent {
+            kind: MouseKind::ScrollDown,
+            col: 1,
+            row: 2,
+            mods: Modifiers::NONE,
+        };
+        assert!(list.handle_mouse(&wheel, area, &mut state));
+        assert_eq!(state.selected(), 3);
     }
 
     #[test]

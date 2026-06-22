@@ -80,7 +80,7 @@ impl core::fmt::Debug for Modifiers {
 }
 
 /// A logical key, platform quirks erased.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum KeyCode {
     /// A character key (already case-folded by the terminal per Shift state).
@@ -119,19 +119,41 @@ pub enum KeyCode {
     F(u8),
 }
 
-/// A normalized key press (or repeat). Key *release* is dropped unless the
-/// kitty protocol is active and decoded; the input map synthesises `held`
-/// state from press/repeat instead (Phase 5).
+/// Whether a key event is an initial press, an auto-repeat, or a release.
+///
+/// `Repeat` and `Release` are only distinguishable when the keyboard
+/// enhancement (kitty) protocol is active (see
+/// [`crate::GuardOptions::keyboard_enhancement`]); without it every key event
+/// arrives as [`KeyState::Press`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum KeyState {
+    /// Initial press.
+    Press,
+    /// Auto-repeat while the key is held.
+    Repeat,
+    /// Release.
+    Release,
+}
+
+/// A normalized key event.
+///
+/// [`Key::state`] distinguishes press, auto-repeat and release. Without the
+/// kitty protocol the terminal only reports presses/repeats, so `state` is
+/// always [`KeyState::Press`] and held/released state is synthesised from their
+/// absence (see `xre-engine`'s `InputMap`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Key {
     /// Which key.
     pub code: KeyCode,
-    /// Modifiers held at the time of the press.
+    /// Modifiers held at the time of the event.
     pub mods: Modifiers,
+    /// Whether this is a press, auto-repeat or release.
+    pub state: KeyState,
 }
 
 /// A mouse button.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum MouseButton {
     /// Left button.
     Left,
@@ -193,20 +215,17 @@ pub enum Event {
 impl Event {
     /// Normalize a crossterm event into an engine [`Event`].
     ///
-    /// Returns `None` for events the engine ignores (key releases without the
-    /// kitty protocol, unmappable keys).
+    /// Returns `None` only for events the engine has no vocabulary for
+    /// (unmappable keys, rare mouse kinds). Key releases are carried as
+    /// [`KeyState::Release`]; they arrive only when the kitty protocol is active.
     #[must_use]
     pub fn from_crossterm(ev: ct::Event) -> Option<Self> {
         match ev {
-            ct::Event::Key(k) => {
-                if matches!(k.kind, ct::KeyEventKind::Release) {
-                    return None;
-                }
-                Some(Self::Key(Key {
-                    code: map_key_code(k.code)?,
-                    mods: map_mods(k.modifiers),
-                }))
-            }
+            ct::Event::Key(k) => Some(Self::Key(Key {
+                code: map_key_code(k.code)?,
+                mods: map_mods(k.modifiers),
+                state: map_key_state(k.kind),
+            })),
             ct::Event::Mouse(m) => Some(Self::Mouse(MouseEvent {
                 kind: map_mouse_kind(m.kind)?,
                 col: u32::from(m.column),
@@ -220,6 +239,14 @@ impl Event {
             ct::Event::FocusGained => Some(Self::FocusGained),
             ct::Event::FocusLost => Some(Self::FocusLost),
         }
+    }
+}
+
+const fn map_key_state(kind: ct::KeyEventKind) -> KeyState {
+    match kind {
+        ct::KeyEventKind::Press => KeyState::Press,
+        ct::KeyEventKind::Repeat => KeyState::Repeat,
+        ct::KeyEventKind::Release => KeyState::Release,
     }
 }
 
@@ -360,15 +387,37 @@ mod tests {
             Event::Key(Key {
                 code: KeyCode::Char('a'),
                 mods: Modifiers::CTRL,
+                state: KeyState::Press,
             })
         );
     }
 
     #[test]
-    fn key_release_is_dropped() {
+    fn key_release_is_carried() {
         let mut k = ct::KeyEvent::new(ct::KeyCode::Char('a'), ct::KeyModifiers::NONE);
         k.kind = ct::KeyEventKind::Release;
-        assert_eq!(Event::from_crossterm(ct::Event::Key(k)), None);
+        assert_eq!(
+            Event::from_crossterm(ct::Event::Key(k)),
+            Some(Event::Key(Key {
+                code: KeyCode::Char('a'),
+                mods: Modifiers::NONE,
+                state: KeyState::Release,
+            }))
+        );
+    }
+
+    #[test]
+    fn key_repeat_carries_repeat_state() {
+        let mut k = ct::KeyEvent::new(ct::KeyCode::Char('w'), ct::KeyModifiers::NONE);
+        k.kind = ct::KeyEventKind::Repeat;
+        assert_eq!(
+            Event::from_crossterm(ct::Event::Key(k)),
+            Some(Event::Key(Key {
+                code: KeyCode::Char('w'),
+                mods: Modifiers::NONE,
+                state: KeyState::Repeat,
+            }))
+        );
     }
 
     #[test]

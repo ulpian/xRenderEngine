@@ -1,7 +1,8 @@
 //! [`Input`]: a single-line text editor with a cursor and command history.
 
+use xre_core::math::UVec2;
 use xre_core::{Rect, Style};
-use xre_term::{Key, KeyCode};
+use xre_term::{Key, KeyCode, KeyState, MouseButton, MouseEvent, MouseKind};
 
 use crate::frame::Frame;
 use crate::widget::Widget;
@@ -87,6 +88,11 @@ impl Input {
     /// Feed a key. Returns `Some(line)` when Enter commits a non-handled-as-edit
     /// line (also pushed onto history); `None` otherwise.
     pub fn handle_key(&mut self, key: Key) -> Option<String> {
+        // Type on press and auto-repeat; ignore releases (delivered only when the
+        // kitty protocol is active) so a key isn't entered twice.
+        if key.state == KeyState::Release {
+            return None;
+        }
         match key.code {
             KeyCode::Char(c) => {
                 self.buffer.insert(self.cursor, c);
@@ -120,6 +126,28 @@ impl Input {
             _ => {}
         }
         None
+    }
+
+    /// Handle a mouse event against the field drawn at `area`.
+    ///
+    /// A left click positions the cursor under the pointer, using the same
+    /// scrolled view window as [`Input::render`]. Returns `true` if consumed.
+    pub fn handle_mouse(&mut self, ev: &MouseEvent, area: Rect) -> bool {
+        if area.is_empty() {
+            return false;
+        }
+        if ev.kind == MouseKind::Down(MouseButton::Left) {
+            if !area.contains(UVec2::new(ev.col, ev.row)) {
+                return false;
+            }
+            let w = area.width() as usize;
+            // Mirror `view`: the window starts `w-1` cells before the cursor.
+            let start = self.cursor.saturating_sub(w.saturating_sub(1));
+            let col = (ev.col - area.left()) as usize;
+            self.cursor = (start + col).min(self.buffer.len());
+            return true;
+        }
+        false
     }
 
     /// Navigate history by `delta` (−1 = older, +1 = newer).
@@ -186,6 +214,7 @@ mod tests {
         Key {
             code,
             mods: Modifiers::NONE,
+            state: KeyState::Press,
         }
     }
 
@@ -213,6 +242,24 @@ mod tests {
         // History recall.
         input.handle_key(key(KeyCode::Up));
         assert_eq!(input.value(), "run");
+    }
+
+    #[test]
+    fn click_positions_cursor() {
+        use xre_term::MouseButton;
+        let mut input = Input::new();
+        input.set_value("hello"); // cursor at end (5)
+        let area = Rect::new(0, 0, 10, 1);
+        let click = MouseEvent {
+            kind: MouseKind::Down(MouseButton::Left),
+            col: 2,
+            row: 0,
+            mods: Modifiers::NONE,
+        };
+        assert!(input.handle_mouse(&click, area));
+        // Window starts at 0 (cursor 5, width 10), so col 2 → cursor 2.
+        input.handle_key(key(KeyCode::Char('X')));
+        assert_eq!(input.value(), "heXllo");
     }
 
     #[test]

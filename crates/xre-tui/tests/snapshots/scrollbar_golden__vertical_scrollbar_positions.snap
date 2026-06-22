@@ -1,0 +1,27 @@
+---
+source: crates/xre-tui/tests/scrollbar_golden.rs
+expression: combined
+---
+top:
+█
+█
+│
+│
+│
+│
+
+mid:
+│
+│
+█
+█
+│
+│
+
+bot:
+│
+│
+│
+│
+█
+█

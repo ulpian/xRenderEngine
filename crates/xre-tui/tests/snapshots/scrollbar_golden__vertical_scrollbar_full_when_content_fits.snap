@@ -1,0 +1,10 @@
+---
+source: crates/xre-tui/tests/scrollbar_golden.rs
+expression: "vbar(4, 8, 0, 6)"
+---
+█
+█
+█
+█
+█
+█

@@ -13,7 +13,9 @@ use std::time::{Duration, Instant};
 use xre::core::math::{UVec2, Vec3};
 use xre::core::{CellBuffer, Color, Style, Transform};
 use xre::prelude::*;
-use xre::term::{Capabilities, Event, EventQueue, KeyCode, MouseKind, Presenter, TerminalGuard};
+use xre::term::{
+    Capabilities, Event, EventQueue, KeyCode, KeyState, MouseKind, Presenter, TerminalGuard,
+};
 
 /// Image extensions `xre view` renders as a textured quad (the rest are OBJ).
 const IMAGE_EXTS: [&str; 6] = ["png", "jpg", "jpeg", "bmp", "ppm", "pgm"];
@@ -130,6 +132,26 @@ fn load_image_subject(path: &Path) -> Result<Subject, String> {
 /// Auto-rotate yaw speed (rad/s) for the `z` toggle. Negative sign matches the
 /// Left-arrow direction (orbits left/clockwise); flip to reverse.
 const AUTO_YAW_RATE: f32 = 0.9;
+
+/// Per-press orbit step (radians) for the arrow keys when viewing a mesh.
+const ORBIT_KEY_STEP: f32 = 0.1;
+
+/// Per-press image pan, as a fraction of the camera distance. Scaling by
+/// distance keeps the on-screen nudge roughly constant across zoom levels.
+const PAN_KEY_FRACTION: f32 = 0.1;
+
+/// Apply one arrow-key press. `right`/`up` are unit screen directions
+/// (−1, 0, or 1): an image pans across the picture in 2D, while a mesh orbits
+/// (yaw / pitch). No-op until the asset has loaded (`orbit` is `None`).
+fn nudge(orbit: Option<&mut OrbitController>, is_image: bool, right: f32, up: f32) {
+    let Some(o) = orbit else { return };
+    if is_image {
+        let step = PAN_KEY_FRACTION * o.distance;
+        o.pan(right * step, up * step);
+    } else {
+        o.rotate(right * ORBIT_KEY_STEP, up * ORBIT_KEY_STEP);
+    }
+}
 
 /// Distance of the cardinal viewer lights from the origin. The model is fit to
 /// the unit sphere, so 3.0 places the light clearly outside it.
@@ -403,34 +425,24 @@ fn run_interactive(
                     buf.resize(size);
                     presenter.resize(size);
                 }
-                Event::Key(k) => match k.code {
+                // Press/repeat only; releases (kitty protocol) drive nothing here.
+                Event::Key(k) if k.state != KeyState::Release => match k.code {
                     KeyCode::Char('q') | KeyCode::Esc => running = false,
-                    KeyCode::Left => {
-                        if let Some(o) = orbit.as_mut() {
-                            o.rotate(-0.1, 0.0);
-                        }
-                    }
-                    KeyCode::Right => {
-                        if let Some(o) = orbit.as_mut() {
-                            o.rotate(0.1, 0.0);
-                        }
-                    }
-                    KeyCode::Up => {
-                        if let Some(o) = orbit.as_mut() {
-                            o.rotate(0.0, 0.1);
-                        }
-                    }
-                    KeyCode::Down => {
-                        if let Some(o) = orbit.as_mut() {
-                            o.rotate(0.0, -0.1);
-                        }
-                    }
+                    // For an image the arrows pan across the picture in 2D; for a
+                    // mesh they orbit (yaw/pitch). `nudge` applies whichever the
+                    // subject calls for in the given screen direction.
+                    KeyCode::Left => nudge(orbit.as_mut(), is_image, -1.0, 0.0),
+                    KeyCode::Right => nudge(orbit.as_mut(), is_image, 1.0, 0.0),
+                    KeyCode::Up => nudge(orbit.as_mut(), is_image, 0.0, 1.0),
+                    KeyCode::Down => nudge(orbit.as_mut(), is_image, 0.0, -1.0),
                     KeyCode::Char('+' | '=') => {
                         if let Some(o) = orbit.as_mut() {
                             o.zoom(0.9);
                         }
                     }
-                    KeyCode::Char('-') => {
+                    // `_` is Shift+`-` on most layouts, so zoom-out works whether
+                    // or not Shift is held (mirroring `+`/`=` for zoom-in).
+                    KeyCode::Char('-' | '_') => {
                         if let Some(o) = orbit.as_mut() {
                             o.zoom(1.1);
                         }
@@ -453,7 +465,15 @@ fn run_interactive(
                         if let (Some((px, py)), Some(o)) = (last_drag, orbit.as_mut()) {
                             let dx = m.col as f32 - px as f32;
                             let dy = m.row as f32 - py as f32;
-                            o.rotate(dx * 0.02, -dy * 0.02);
+                            // Drag-to-orbit for a 3D mesh follows the grabbed
+                            // surface: dragging right turns the model's right
+                            // side toward you (inverted from the raw cursor
+                            // delta). Images keep the plain mapping.
+                            if is_image {
+                                o.rotate(dx * 0.02, -dy * 0.02);
+                            } else {
+                                o.rotate(-dx * 0.02, dy * 0.02);
+                            }
                         }
                         last_drag = Some((m.col, m.row));
                     }
@@ -576,6 +596,11 @@ fn run_interactive(
                 }))
                 .title("stats");
             let ii = info.render(cols[1], &mut frame);
+            let arrows_hint = if is_image {
+                "arrows pan"
+            } else {
+                "arrows orbit"
+            };
             let stats = [
                 subject.info.clone(),
                 format!("draw   {shade_ms:4.1}ms"),
@@ -584,6 +609,7 @@ fn run_interactive(
                 format!("light  {light_label}"),
                 format!("shader {}", shaders[shader_idx].0),
                 String::new(),
+                arrows_hint.into(),
                 "drag   orbit".into(),
                 "scroll zoom".into(),
                 "m      shade mode".into(),
@@ -603,7 +629,11 @@ fn run_interactive(
             // Live help overlay (toggle with `h`), centred over the viewport.
             if show_help {
                 let help_lines = [
-                    "arrows / drag   orbit",
+                    if is_image {
+                        "arrows          pan"
+                    } else {
+                        "arrows / drag   orbit"
+                    },
                     "+ / - / scroll  zoom",
                     "m               shade mode",
                     "t/b/l/r         light pos",

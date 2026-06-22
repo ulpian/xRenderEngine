@@ -6,6 +6,7 @@
 //!
 //! Run with `cargo run -p xre-tui --example spinning-cube`. Press `q` / `Esc` to
 //! quit, `Space` to pause, `w` to toggle the second mesh, `c` to cycle shaders.
+//! Drag with the mouse to rotate the scene and scroll to zoom.
 
 use std::time::{Duration, Instant};
 
@@ -15,8 +16,13 @@ use xre_render::{
     builtin_cell_shaders, draw_mesh, Camera, Cull, LightRig, Material, Mesh, Projection,
     SampleBuffer, ShadeMode,
 };
-use xre_term::{Capabilities, Event, EventQueue, KeyCode, Presenter, TerminalGuard};
-use xre_tui::{BorderSet, Constraint, Frame, Layout, Panel, Text, Viewport3D, Widget};
+use xre_term::{
+    Capabilities, Event, EventQueue, KeyCode, KeyState, MouseKind, Presenter, TerminalGuard,
+};
+use xre_tui::{
+    viewport_gesture, BorderSet, Constraint, Frame, Layout, Panel, Text, Viewport3D,
+    ViewportGesture, Widget,
+};
 
 #[allow(clippy::too_many_lines)]
 fn main() -> std::io::Result<()> {
@@ -37,6 +43,11 @@ fn main() -> std::io::Result<()> {
     let mut paused = false;
     let mut show_torus = true;
     let mut angle = 0.0f32;
+    // Mouse-driven orbit offsets and camera distance (zoom).
+    let mut yaw = 0.0f32;
+    let mut pitch = 0.0f32;
+    let mut dist = 4.5f32;
+    let mut last_drag: Option<(u32, u32)> = None;
     let mut last = Instant::now();
     let mut running = true;
 
@@ -50,13 +61,32 @@ fn main() -> std::io::Result<()> {
                     buf.resize(size);
                     presenter.resize(size);
                 }
-                Event::Key(k) => match k.code {
+                // Press/repeat only; ignore releases so toggles don't cancel out.
+                Event::Key(k) if k.state != KeyState::Release => match k.code {
                     KeyCode::Char('q') | KeyCode::Esc => running = false,
                     KeyCode::Char(' ') => paused = !paused,
                     KeyCode::Char('w') => show_torus = !show_torus,
                     KeyCode::Char('c') => shader_idx = (shader_idx + 1) % shaders.len(),
                     _ => {}
                 },
+                Event::Mouse(m) => {
+                    if matches!(m.kind, MouseKind::Down(_)) {
+                        last_drag = Some((m.col, m.row));
+                    }
+                    match viewport_gesture(&m, last_drag, 0.02) {
+                        ViewportGesture::Orbit { dyaw, dpitch } => {
+                            yaw += dyaw;
+                            pitch = (pitch + dpitch).clamp(-1.5, 1.5);
+                        }
+                        ViewportGesture::Zoom(z) => dist = z.mul_add(0.4, dist).clamp(2.0, 12.0),
+                        ViewportGesture::None => {}
+                    }
+                    match m.kind {
+                        MouseKind::Drag(_) => last_drag = Some((m.col, m.row)),
+                        MouseKind::Up(_) => last_drag = None,
+                        _ => {}
+                    }
+                }
                 _ => {}
             }
         }
@@ -90,15 +120,15 @@ fn main() -> std::io::Result<()> {
             4,
         );
         samples.clear([8, 10, 16]);
-        let cam = Camera::look_at(Vec3::new(0.0, 1.6, 4.5), Vec3::ZERO);
+        let cam = Camera::look_at(Vec3::new(0.0, 1.6, dist), Vec3::ZERO);
         let vp = cam.view_projection(
             inner.width().max(1),
             inner.height().max(1),
             Projection::DEFAULT_CELL_ASPECT,
         );
         let mut model = Transform::IDENTITY;
-        model.rotation = xre_core::math::Quat::from_rotation_y(angle)
-            * xre_core::math::Quat::from_rotation_x(angle * 0.6);
+        model.rotation = xre_core::math::Quat::from_rotation_y(angle + yaw)
+            * xre_core::math::Quat::from_rotation_x(angle.mul_add(0.6, pitch));
         draw_mesh(
             &mut samples,
             &cube,
@@ -111,7 +141,8 @@ fn main() -> std::io::Result<()> {
         );
         if show_torus {
             let mut tmodel = Transform::from_translation(Vec3::new(0.0, 0.0, 0.0));
-            tmodel.rotation = xre_core::math::Quat::from_rotation_x(angle * -0.4);
+            tmodel.rotation = xre_core::math::Quat::from_rotation_y(yaw)
+                * xre_core::math::Quat::from_rotation_x(angle.mul_add(-0.4, pitch));
             tmodel.scale = Vec3::splat(1.0);
             draw_mesh(
                 &mut samples,
@@ -152,6 +183,8 @@ fn main() -> std::io::Result<()> {
                 format!("uptime {:4.0}s", start.elapsed().as_secs_f32()),
                 format!("shader {}", shaders[shader_idx].0),
                 String::new(),
+                "drag   rotate".into(),
+                "wheel  zoom".into(),
                 "space  pause".into(),
                 "w      torus".into(),
                 "c      shader".into(),

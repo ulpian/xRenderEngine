@@ -18,6 +18,7 @@
 mod focus;
 mod frame;
 mod layout;
+mod mouse;
 mod panel;
 mod theme;
 #[cfg(feature = "render")]
@@ -31,11 +32,13 @@ pub use viewport::Viewport3D;
 pub use focus::{FocusId, FocusManager};
 pub use frame::{Frame, WrappingMode};
 pub use layout::{Constraint, Direction, GridLayout, Layout};
+pub use mouse::{viewport_gesture, MouseRouter, ViewportGesture};
 pub use panel::{BorderSet, Panel, TitleAlign};
 pub use theme::Theme;
 pub use widget::Widget;
 pub use widgets::{
-    Align, Gauge, Input, List, ListState, Log, Separator, Sparkline, Spinner, Table, Tabs, Text,
+    Align, Gauge, Input, List, ListState, Log, Scrollbar, ScrollbarOrientation, ScrollbarState,
+    Separator, Sparkline, Spinner, Table, Tabs, Text,
 };
 
 // Re-export the core drawing vocabulary so downstream code can `use xre_tui::*`.

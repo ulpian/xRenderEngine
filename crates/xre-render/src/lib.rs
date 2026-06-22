@@ -37,7 +37,7 @@ pub use light::{luminance, Light, LightRig};
 pub use material::{Material, TexHandle};
 pub use mesh::{Aabb, Mesh};
 pub use raster::{draw_mesh, draw_mesh_textured, Cull, Rasterizer, ShadeMode, TextureSampler};
-pub use sample::{Sample, SampleBuffer};
+pub use sample::{RowBand, Sample, SampleBuffer};
 pub use settings::RenderSettings;
 pub use shader::{
     builtin_cell_shaders, resolve_cells, CellShader, LumaBias, LuminanceRamp, DENSITY_ORDER,

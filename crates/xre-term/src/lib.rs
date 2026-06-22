@@ -21,8 +21,10 @@ mod presenter;
 
 pub use capabilities::{Capabilities, UnicodeLevel};
 pub use error::{Result, TermError};
-pub use events::{Event, EventQueue, Key, KeyCode, Modifiers, MouseButton, MouseEvent, MouseKind};
-pub use guard::TerminalGuard;
+pub use events::{
+    Event, EventQueue, Key, KeyCode, KeyState, Modifiers, MouseButton, MouseEvent, MouseKind,
+};
+pub use guard::{GuardOptions, TerminalGuard};
 pub use presenter::Presenter;
 
 // Re-exported so downstream crates can name the color depth without depending on

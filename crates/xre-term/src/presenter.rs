@@ -502,6 +502,7 @@ mod tests {
             unicode: crate::UnicodeLevel::Full,
             size,
             synchronized_output: false,
+            mouse: false,
         }
     }
 

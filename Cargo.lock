@@ -1626,7 +1626,10 @@ dependencies = [
 name = "xre-engine"
 version = "0.0.1"
 dependencies = [
+ "criterion",
+ "dhat",
  "hecs",
+ "insta",
  "proptest",
  "thiserror",
  "xre-cello",
@@ -1676,6 +1679,7 @@ name = "xre-tui"
 version = "0.0.1"
 dependencies = [
  "insta",
+ "proptest",
  "unicode-width",
  "xre-core",
  "xre-render",

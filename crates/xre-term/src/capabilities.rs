@@ -32,15 +32,20 @@ pub struct Capabilities {
     /// Whether the terminal advertises synchronized-output (DEC mode 2026)
     /// support, which lets the presenter flush tear-free frames.
     pub synchronized_output: bool,
+    /// Whether the terminal is expected to support SGR mouse reporting. Advisory
+    /// only: the [`crate::TerminalGuard`] still decides whether to actually
+    /// enable capture (see [`crate::GuardOptions`]).
+    pub mouse: bool,
 }
 
 impl Capabilities {
-    /// The conservative fallback: 16 colors, ASCII only, an 80×24 grid.
+    /// The conservative fallback: 16 colors, ASCII only, an 80×24 grid, no mouse.
     pub const FALLBACK: Self = Self {
         color: ColorDepth::Ansi16,
         unicode: UnicodeLevel::AsciiOnly,
         size: UVec2::new(80, 24),
         synchronized_output: false,
+        mouse: false,
     };
 
     /// Probe the live environment for terminal capabilities.
@@ -64,11 +69,13 @@ impl Capabilities {
             UVec2::new(u32::from(cols), u32::from(rows))
         });
         let synchronized_output = synchronized_output_from_env(env("TERM_PROGRAM").as_deref());
+        let mouse = mouse_from_env(env("TERM").as_deref());
         Self {
             color,
             unicode,
             size,
             synchronized_output,
+            mouse,
         }
     }
 }
@@ -140,6 +147,17 @@ pub fn synchronized_output_from_env(term_program: Option<&str>) -> bool {
     )
 }
 
+/// Heuristic for SGR mouse-reporting support based on `TERM`.
+///
+/// Virtually every modern xterm-compatible terminal supports mouse reporting, so
+/// this is shaped as a *deny*-list rather than an allow-list: assume support
+/// unless `TERM` is absent, empty or the `dumb` terminal. This is advisory only —
+/// the guard decides whether to actually capture (see [`crate::GuardOptions`]).
+#[must_use]
+pub fn mouse_from_env(term: Option<&str>) -> bool {
+    !matches!(term, None | Some("" | "dumb"))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -206,5 +224,14 @@ mod tests {
         assert!(synchronized_output_from_env(Some("kitty")));
         assert!(!synchronized_output_from_env(Some("Apple_Terminal")));
         assert!(!synchronized_output_from_env(None));
+    }
+
+    #[test]
+    fn mouse_denylist() {
+        assert!(mouse_from_env(Some("xterm-256color")));
+        assert!(mouse_from_env(Some("screen")));
+        assert!(!mouse_from_env(Some("dumb")));
+        assert!(!mouse_from_env(Some("")));
+        assert!(!mouse_from_env(None));
     }
 }

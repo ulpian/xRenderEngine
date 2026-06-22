@@ -245,6 +245,88 @@ fm.register(FocusId(1));   // list
 if fm.is_focused(FocusId(0)) { input.handle_key(key); }
 ```
 
+## Scrollbars
+
+`Scrollbar` is a track-and-thumb indicator for content taller (or wider) than its
+viewport. It is stateless; the scroll metrics live in a `ScrollbarState`
+(`content_length`, `viewport_length`, `position`, all in content units — items or
+lines) that the application owns across frames. The thumb geometry is computed with
+integer-only math, so it stays bit-identical across platforms.
+
+A scrollbar does **not** lay itself out. Reserve a one-cell strip next to the
+content with the layout solver and render into it:
+
+```rust,ignore
+let cols = Layout::horizontal([Constraint::Fill(1), Constraint::Len(1)]).split(inner);
+let (content, track) = (cols[0], cols[1]);
+list.render_stateful(content, &mut frame, &mut list_state);
+
+let mut sb = list_state.scrollbar_state(content.height() as u16);
+Scrollbar::new(ScrollbarOrientation::VerticalRight)
+    .ascii(ascii)                                   // '|'/'#' instead of '│'/'█'
+    .track_style(theme.style("scrollbar.track"))
+    .thumb_style(theme.style("scrollbar.thumb"))
+    .render_stateful(track, &mut frame, &mut sb);
+```
+
+`ListState::scrollbar_state(viewport)` and `Log::scrollbar_state(viewport)` build the
+state for you from a widget's current scroll position, so the bar always lines up
+with what is visible. `Log::scroll_to(position, viewport)` is the inverse — use it to
+drive the log from a dragged scrollbar. Orientations: `VerticalRight` / `VerticalLeft`
+and `HorizontalBottom` / `HorizontalTop`. Theme keys: `scrollbar.track`,
+`scrollbar.thumb`.
+
+## Mouse support
+
+Mouse capture is **on by default** (`TerminalGuard::enter()`); pass
+`GuardOptions { mouse: false, ..Default::default() }` to `enter_with` to turn it
+off. While capture is on, the terminal sends clicks, drags and the scroll wheel to
+your app as `Event::Mouse(MouseEvent)` instead of doing native click-drag text
+selection — users can still select text by holding **Shift** (most terminals) or
+**Option** (macOS). See [Terminal compatibility](terminals.md) for the trade-off.
+
+For a simple, single-region target (a centred menu, say) a `MouseRouter` is
+overkill: mirror the render layout in a small `hit(area, col, row) -> Option<idx>`
+helper — the same pattern `Tabs::hit` uses — and call it on `MouseKind::Down`. The
+`rift-fps` example does exactly this for its clickable pause menu.
+
+Because the UI is immediate-mode there is no retained widget tree, so a
+`MouseRouter` does the hit-testing — the same rebuild-every-frame model as
+`FocusManager`. During render, register each interactive region's `Rect` against a
+`FocusId`; during input, route an event to the region under the cursor. Routing
+honours **drag capture** (a press sticks to its target through the drag, so a
+one-cell scrollbar thumb keeps tracking even when the cursor slides off) and
+**z-order** (later registrations win overlaps). Events are routed against *last*
+frame's regions — a one-frame latency that is standard for immediate-mode and
+invisible at interactive rates.
+
+```rust,ignore
+// input phase — route against the regions registered last frame
+if let Event::Mouse(m) = ev {
+    if let Some(id) = router.route(&m) {
+        if matches!(m.kind, MouseKind::Down(_)) { focus.focus(id); }
+        match id {
+            LIST_ID => { list.handle_mouse(&m, list_rect, &mut list_state); }
+            BAR_ID  => { /* Scrollbar::handle_mouse + Log::scroll_to */ }
+            _ => {}
+        }
+    }
+}
+
+// render phase — rebuild the regions in paint order
+router.begin_frame();
+router.register(LIST_ID, list_rect);
+list.render_stateful(list_rect, &mut frame, &mut list_state);
+```
+
+Each interactive widget exposes an inherent `handle_mouse` (mirroring `handle_key`):
+`List` selects the row under a click and scrolls on the wheel, `Log` scrolls on the
+wheel, `Tabs::handle_mouse` returns the clicked tab index, `Input` positions the
+cursor, and `Scrollbar` drags its thumb. For a 3D `Viewport3D`, translate events
+with `viewport_gesture(ev, prev, sens)` and apply the resulting `ViewportGesture`
+(orbit / zoom) to your own camera controller. The `dashboard`, `spinning-cube` and
+`rift-fps` examples wire all of this up.
+
 ## Putting it together
 
 The full pattern — a `TerminalGuard` for RAII restore, a `Capabilities::probe`, a
