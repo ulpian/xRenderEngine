@@ -24,12 +24,12 @@ all-features = true
 workspace = true
 
 [dependencies]
-xre-core = { path = "../xre-core", version = "0.1.0" }
-xre-term = { path = "../xre-term", version = "0.1.0" }
-xre-tui = { path = "../xre-tui", version = "0.1.0" }
-xre-render = { path = "../xre-render", version = "0.1.0" }
-xre-cello = { path = "../xre-cello", version = "0.1.0" }
-xre-engine = { path = "../xre-engine", version = "0.1.0" }
+xre-core = { path = "../xre-core", version = "0.2.0" }
+xre-term = { path = "../xre-term", version = "0.2.0" }
+xre-tui = { path = "../xre-tui", version = "0.2.0" }
+xre-render = { path = "../xre-render", version = "0.2.0" }
+xre-cello = { path = "../xre-cello", version = "0.2.0" }
+xre-engine = { path = "../xre-engine", version = "0.2.0" }
 
 [features]
 # Feature flags per RiftEngine-Plan/02-architecture.md §10. Inert in the skeleton;

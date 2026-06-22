@@ -24,7 +24,7 @@ default = ["parallel"]
 parallel = ["xre-rs/parallel"]
 
 [dependencies]
-glyphgen = { path = "../glyphgen", version = "0.1.0" }
+glyphgen = { path = "../glyphgen", version = "0.2.0" }
 # Facade is published as `xre-rs`; its library target is named `xre`, so the
 # source keeps using `xre::…`.
-xre-rs = { path = "../../crates/xre", version = "0.1.0", default-features = false }
+xre-rs = { path = "../../crates/xre", version = "0.2.0", default-features = false }

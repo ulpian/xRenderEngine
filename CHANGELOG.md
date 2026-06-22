@@ -6,6 +6,88 @@ All notable changes to xRenderEngine are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-06-22
+
+A performance-focused release that drives the render and present hot paths toward
+the zero-allocation steady state the perf budget targets, adds a runtime
+color-depth lever for terminal-I/O-bound viewports, and fixes two CI/release
+issues. Every render change is **byte-identical** to 0.1.0 — verified by the
+existing golden-frame, property and zero-alloc suites — so output is unchanged;
+only throughput and allocation behaviour improve. This is also the first release
+where the full crate set, including the `xre` CLI and `glyphgen`, is published to
+crates.io.
+
+### Added
+
+- **`Presenter` color-depth override (`xre-term`).** New `Presenter::color_depth()`
+  and `Presenter::set_color_depth(ColorDepth)` let an application cap the depth
+  colors are resolved to at present time. Capping a truecolor terminal to
+  `ColorDepth::Ansi256` makes each color SGR shorter (`38;5;N` vs `38;2;R;G;B`)
+  **and** collapses near-identical colors onto the 256-entry palette, so adjacent
+  cells coalesce and the diffed update stream shrinks — the main lever for a
+  dense, fully-repainted 3D viewport that is bound by terminal I/O. Setting the
+  depth forces one full redraw so the on-screen record is re-resolved.
+- **`rift-fps`: 256-color toggle.** Press `c` to cap the viewport to the
+  256-palette (fewer present bytes when the terminal is the bottleneck) or return
+  to full truecolor.
+
+### Changed
+
+- **`rift-fps` default supersampling.** Vertical supersampling now defaults to 2
+  (half the raycast and shade samples — the cheapest render-side quality knob)
+  instead of 4; switch back to 4 in Options for a crisper image.
+
+### Performance
+
+All of the following preserve byte-for-byte output (same values, same
+accumulation order) and the zero-allocation steady-state invariant:
+
+- **`xre-term` present.** `emit_sgr` writes SGR parameters straight into the
+  reusable output buffer via a new `push_param` helper, eliminating the per-cell
+  `Vec<u16>` scratch the old join allocated — the repaint path touches thousands
+  of cells per frame.
+- **`xre-render` cell shaders.** `LuminanceRamp` and the `density` / `HalfBlock`
+  shaders read the structure-of-arrays sample planes directly (one `planes()`
+  borrow plus a flat index per sample) instead of the per-sample, bounds-checked
+  `SampleBuffer::get`. `HalfBlock` now accumulates its top and bottom halves in a
+  single pass over the cell rather than two.
+- **`xre-engine` raycaster.** Per-column DDA spans are computed once per frame
+  into reused thread-local scratch, then shared read-only across row bands —
+  previously each band recomputed them, which under rayon meant `threads × 3`
+  redundant DDA + lighting passes. The fill still writes every sample exactly
+  once, so parallel and serial output remain identical.
+- **`xre-cello` textures.** Power-of-two texture dimensions wrap texel
+  coordinates with a bitmask (`v & (n − 1)`) instead of `rem_euclid`, dropping an
+  integer division from the bilinear sample path (4 texels × 2 axes per sample);
+  non-pow2 dimensions keep `rem_euclid`.
+- **`rift-fps` HUD.** The minimap/status/log row split is memoized on
+  `(area, map_height)`, so the per-frame `Layout::split` `Vec<Rect>` allocation is
+  gone except on resize.
+
+### Fixed
+
+- **Zero-alloc gate spun up rayon for tiny frames (`xre-render`).**
+  `Rasterizer::should_parallelize` evaluated `rayon::current_num_threads()` first
+  in its `&&` chain, so even a sub-threshold draw initialised rayon's global pool;
+  the worker threads' asynchronous startup allocations could then land inside a
+  measured frame on a slow machine, flaking the
+  `steady_state_frame_allocates_nothing` test in CI. The cheap sample/primitive
+  checks now come first, so a sub-threshold frame never touches the pool — the
+  same ordering `SampleBuffer::should_band_parallel` already used.
+- **`aarch64-unknown-linux-musl` release build failed to link.** `musl-tools`
+  only ships the x86_64 musl gcc, so the aarch64 cross-build fell back to the host
+  x86_64 `cc`/`ld` and rejected the AArch64 objects (`Relocations in generic ELF
+  (EM: 183) … file in wrong format`). The release workflow now installs
+  `gcc-aarch64-linux-gnu` and points cargo at it via
+  `CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER`; Rust still supplies musl's
+  self-contained CRT/libc/libunwind, so the GNU gcc only acts as the linker driver.
+
+### Packaging
+
+- The full crate set is now on crates.io: the libraries, the `xre-rs` facade, the
+  `glyphgen` tool, and the `xre-cli` binary — so `cargo install xre-cli` installs
+  the `xre` CLI without a source checkout.
+
 ## [0.1.0] - 2026-06-22
 
 The first release under the project's Semantic Versioning commitment. A broad
@@ -164,6 +246,7 @@ golden-frame and benchmark coverage).
   ordered dithering, the quantized shape-vector LUT, glTF/PNG, audio, networking,
   and publishing the `xre-cli` / `glyphgen` tools to crates.io.
 
-[Unreleased]: https://github.com/ulpian/xRenderEngine/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/ulpian/xRenderEngine/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/ulpian/xRenderEngine/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/ulpian/xRenderEngine/compare/v0.0.1...v0.1.0
 [0.0.1]: https://github.com/ulpian/xRenderEngine/releases/tag/v0.0.1

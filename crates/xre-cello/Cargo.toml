@@ -14,8 +14,8 @@ categories = ["rendering", "game-development"]
 workspace = true
 
 [dependencies]
-xre-core = { path = "../xre-core", version = "0.1.0" }
-xre-render = { path = "../xre-render", version = "0.1.0" }
+xre-core = { path = "../xre-core", version = "0.2.0" }
+xre-render = { path = "../xre-render", version = "0.2.0" }
 glam = { workspace = true }
 thiserror = { workspace = true }
 image = { workspace = true }

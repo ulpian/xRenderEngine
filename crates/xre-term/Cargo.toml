@@ -14,7 +14,7 @@ categories = ["command-line-interface"]
 workspace = true
 
 [dependencies]
-xre-core = { path = "../xre-core", version = "0.1.0" }
+xre-core = { path = "../xre-core", version = "0.2.0" }
 crossterm = { workspace = true }
 thiserror = { workspace = true }
 unicode-width = { workspace = true }
